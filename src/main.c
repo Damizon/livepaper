@@ -309,32 +309,6 @@ static Window find_nemo_desktop(Display *d, Window root)
     return 0;
 }
 
-static Window wait_for_nemo_desktop(Display *d, int timeout_seconds)
-{
-    Window root = DefaultRootWindow(d);
-
-    for (int i = 0; i < timeout_seconds; i++)
-    {
-        Window nemo = find_nemo_desktop(d, root);
-
-        if (nemo)
-        {
-            XWindowAttributes attr;
-
-            if (XGetWindowAttributes(d, nemo, &attr) &&
-                attr.map_state == IsViewable)
-            {
-                printf("Nemo desktop found: 0x%lx\n", nemo);
-                return nemo;
-            }
-        }
-
-        sleep(1);
-    }
-
-    printf("Nemo desktop not found. Continuing anyway.\n");
-    return 0;
-}
 
 static int wait_for_desktop_ready(Display *d, int timeout_seconds)
 {
