@@ -1,0 +1,7 @@
+livepaper
+livepaper-gui
+build/
+*.o
+*.pid
+*.lock
+*.log
