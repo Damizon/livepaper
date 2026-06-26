@@ -14,8 +14,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <stdarg.h>
-
-#define PATH_BUF 2048
+#include "../include/config.h"
 
 static Display *g_display = NULL;
 static Window g_window = 0;
@@ -28,12 +27,6 @@ static char pid_file[PATH_BUF];
 static char lock_file[PATH_BUF];
 static char autostart_file[PATH_BUF];
 
-typedef struct
-{
-    char wallpaper[PATH_BUF];
-    char monitor[256];
-    int delay;
-} LivepaperConfig;
 
 static int safe_snprintf(char *dst, size_t size, const char *fmt, ...)
 {
