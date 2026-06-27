@@ -10,4 +10,13 @@ typedef struct
     int delay;
 } LivepaperConfig;
 
+typedef struct
+{
+    char config_dir[PATH_BUF];
+    char config_file[PATH_BUF];
+    char pid_file[PATH_BUF];
+    char lock_file[PATH_BUF];
+    char autostart_file[PATH_BUF];
+} LivepaperPaths;
+
 #endif
