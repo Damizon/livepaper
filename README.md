@@ -31,22 +31,19 @@ Runtime dependencies are handled by the `.deb` package:
 
 ## Install From Release
 
-Download the latest `.deb` package from:
-
-https://github.com/Damizon/livepaper/releases
-
-Install it with:
+Download the `.deb` package from GitHub Releases and install it:
 
 ```bash
-cd ~/Pobrane
+curl -LO https://github.com/Damizon/livepaper/releases/download/v0.4.1/livepaper_0.4.1_amd64.deb
 sudo apt install ./livepaper_0.4.1_amd64.deb
 ```
 
-If you built the package from this repository instead, install the generated file
-from the project directory:
+Or clone the repository, build the package, and install the generated `.deb`:
 
 ```bash
-cd ~/Pulpit/Livepaper
+git clone https://github.com/Damizon/livepaper.git
+cd livepaper
+make deb
 sudo apt install ./build/packages/livepaper_0.4.1_amd64.deb
 ```
 
