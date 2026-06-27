@@ -38,7 +38,16 @@ https://github.com/Damizon/livepaper/releases
 Install it with:
 
 ```bash
+cd ~/Pobrane
 sudo apt install ./livepaper_0.4.1_amd64.deb
+```
+
+If you built the package from this repository instead, install the generated file
+from the project directory:
+
+```bash
+cd ~/Pulpit/Livepaper
+sudo apt install ./build/packages/livepaper_0.4.1_amd64.deb
 ```
 
 After installation, launch **Livepaper** from the application menu.
