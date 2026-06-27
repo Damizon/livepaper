@@ -2,6 +2,7 @@
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
 #include <X11/extensions/Xrandr.h>
+#include <X11/extensions/shape.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,6 +24,15 @@ static pid_t g_mpv_pid = -1;
 static int g_lock_fd = -1;
 
 static LivepaperPaths g_paths;
+
+typedef struct DesktopWindowSelection
+{
+    Window root;
+    Window desktop;
+    Window window;
+    int swm_vroot_found;
+    int nemo_found;
+} DesktopWindowSelection;
 
 
 static int safe_snprintf(char *dst, size_t size, const char *fmt, ...)
@@ -332,6 +342,149 @@ static Window find_nemo_desktop(Display *d, Window root)
     return 0;
 }
 
+static Window xwinwrap_find_subwindow(Display *d, Window win, int w, int h)
+{
+    unsigned int i;
+    unsigned int j;
+    int screen = DefaultScreen(d);
+    int display_width = DisplayWidth(d, screen);
+    int display_height = DisplayHeight(d, screen);
+
+    for (i = 0; i < 10; i++)
+    {
+        Window troot;
+        Window parent;
+        Window *children = NULL;
+        unsigned int n = 0;
+
+        if (!XQueryTree(d, win, &troot, &parent, &children, &n))
+            break;
+
+        for (j = 0; j < n; j++)
+        {
+            XWindowAttributes attrs;
+
+            if (XGetWindowAttributes(d, children[j], &attrs))
+            {
+                if (attrs.map_state != 0 &&
+                    attrs.class == InputOutput &&
+                    ((attrs.width == display_width && attrs.height == display_height) ||
+                     (attrs.width == w && attrs.height == h)))
+                {
+                    win = children[j];
+                    break;
+                }
+            }
+        }
+
+        if (children)
+            XFree(children);
+
+        if (j == n)
+            break;
+    }
+
+    return win;
+}
+
+static DesktopWindowSelection xwinwrap_find_desktop_window(Display *d)
+{
+    int screen = DefaultScreen(d);
+    Window root = RootWindow(d, screen);
+    Window win = root;
+    Window troot;
+    Window parent;
+    Window *children = NULL;
+    unsigned int n = 0;
+    unsigned char *buf = NULL;
+    Atom type;
+    int format;
+    unsigned long nitems;
+    unsigned long bytes;
+    DesktopWindowSelection selection;
+    selection.root = root;
+    selection.desktop = root;
+    selection.window = root;
+    selection.swm_vroot_found = 0;
+    selection.nemo_found = 0;
+
+    XQueryTree(d, root, &troot, &parent, &children, &n);
+    for (int i = 0; i < (int)n; i++)
+    {
+        if (XGetWindowProperty(d, children[i], XInternAtom(d, "__SWM_VROOT", False),
+                               0, 1, False, XA_WINDOW, &type, &format,
+                               &nitems, &bytes, &buf) == Success &&
+            type == XA_WINDOW)
+        {
+            win = *(Window *)buf;
+            XFree(buf);
+            XFree(children);
+            selection.root = win;
+            selection.desktop = win;
+            selection.window = win;
+            selection.swm_vroot_found = 1;
+            selection.nemo_found = is_nemo_desktop(d, win);
+            return selection;
+        }
+
+        if (buf)
+        {
+            XFree(buf);
+            buf = NULL;
+        }
+    }
+
+    if (children)
+        XFree(children);
+
+    Window nemo = find_nemo_desktop(d, root);
+
+    if (nemo)
+    {
+        selection.root = root;
+        selection.desktop = nemo;
+        selection.window = nemo;
+        selection.nemo_found = 1;
+        return selection;
+    }
+
+    win = xwinwrap_find_subwindow(d, root, -1, -1);
+    win = xwinwrap_find_subwindow(
+        d,
+        win,
+        DisplayWidth(d, screen),
+        DisplayHeight(d, screen)
+    );
+
+    if (buf)
+        XFree(buf);
+
+    selection.root = root;
+    selection.desktop = win;
+    selection.window = win;
+
+    return selection;
+}
+
+static int enable_input_passthrough(Display *d, Window win)
+{
+    int event_base;
+    int error_base;
+
+    if (!XShapeQueryExtension(d, &event_base, &error_base))
+        return 0;
+
+    Region empty = XCreateRegion();
+
+    if (!empty)
+        return 0;
+
+    XShapeCombineRegion(d, win, ShapeInput, 0, 0, empty, ShapeSet);
+    XDestroyRegion(empty);
+
+    return 1;
+}
+
 
 static int wait_for_desktop_ready(Display *d, int timeout_seconds)
 {
@@ -438,6 +591,148 @@ static void keep_layer_order(Display *d, Window livepaper)
 {
     XLowerWindow(d, livepaper);
     XFlush(d);
+}
+
+static Window get_window_parent(Display *d, Window win)
+{
+    Window root_return;
+    Window parent = 0;
+    Window *children = NULL;
+    unsigned int nchildren = 0;
+
+    if (!XQueryTree(d, win, &root_return, &parent, &children, &nchildren))
+        return 0;
+
+    if (children)
+        XFree(children);
+
+    return parent;
+}
+
+static void force_nemo_above_livepaper(Display *d, Window livepaper, Window nemo)
+{
+    Window livepaper_parent;
+    Window nemo_parent;
+
+    if (!nemo)
+        return;
+
+    livepaper_parent = get_window_parent(d, livepaper);
+    nemo_parent = get_window_parent(d, nemo);
+
+    if (livepaper_parent && livepaper_parent == nemo_parent)
+    {
+        Window order[2];
+        order[0] = nemo;
+        order[1] = livepaper;
+        XRestackWindows(d, order, 2);
+        XSync(d, False);
+    }
+
+    XRaiseWindow(d, nemo);
+    XSync(d, False);
+
+    XLowerWindow(d, livepaper);
+    XSync(d, False);
+}
+
+static void send_active_window(Display *d, Window root, Window target)
+{
+    Atom active_window = XInternAtom(d, "_NET_ACTIVE_WINDOW", False);
+    XEvent ev;
+
+    memset(&ev, 0, sizeof(ev));
+    ev.xclient.type = ClientMessage;
+    ev.xclient.window = target;
+    ev.xclient.message_type = active_window;
+    ev.xclient.format = 32;
+    ev.xclient.data.l[0] = 2;
+    ev.xclient.data.l[1] = CurrentTime;
+    ev.xclient.data.l[2] = None;
+
+    XSendEvent(
+        d,
+        root,
+        False,
+        SubstructureRedirectMask | SubstructureNotifyMask,
+        &ev
+    );
+    XSync(d, False);
+}
+
+static void pulse_managed_window(Display *d, Window root)
+{
+    int screen = DefaultScreen(d);
+    XSetWindowAttributes attrs;
+    memset(&attrs, 0, sizeof(attrs));
+    attrs.background_pixel = BlackPixel(d, screen);
+    attrs.event_mask = StructureNotifyMask;
+
+    Window pulse = XCreateWindow(
+        d,
+        root,
+        -100,
+        -100,
+        1,
+        1,
+        0,
+        CopyFromParent,
+        InputOutput,
+        CopyFromParent,
+        CWBackPixel | CWEventMask,
+        &attrs
+    );
+
+    XStoreName(d, pulse, "Livepaper stacking refresh");
+
+    Atom state_prop = XInternAtom(d, "_NET_WM_STATE", False);
+    Atom states[2];
+    states[0] = XInternAtom(d, "_NET_WM_STATE_SKIP_TASKBAR", False);
+    states[1] = XInternAtom(d, "_NET_WM_STATE_SKIP_PAGER", False);
+    XChangeProperty(
+        d,
+        pulse,
+        state_prop,
+        XA_ATOM,
+        32,
+        PropModeReplace,
+        (unsigned char *)states,
+        2
+    );
+    XSync(d, False);
+
+    XMapWindow(d, pulse);
+    XSync(d, False);
+
+    usleep(100000);
+
+    XUnmapWindow(d, pulse);
+    XSync(d, False);
+
+    XDestroyWindow(d, pulse);
+    XSync(d, False);
+}
+
+static void refresh_muffin_stacking_once(Display *d, Window livepaper)
+{
+    int screen = DefaultScreen(d);
+    Window root = RootWindow(d, screen);
+    Window nemo;
+
+    usleep(500000);
+
+    nemo = find_nemo_desktop(d, root);
+    if (!nemo)
+    {
+        XLowerWindow(d, livepaper);
+        XSync(d, False);
+        return;
+    }
+
+    force_nemo_above_livepaper(d, livepaper, nemo);
+    send_active_window(d, root, nemo);
+    pulse_managed_window(d, root);
+    force_nemo_above_livepaper(d, livepaper, nemo);
 }
 
 static void save_config(const char *wallpaper, const char *monitor, int delay)
@@ -646,29 +941,60 @@ static int run_wallpaper(const LivepaperConfig *cfg)
     int screen = DefaultScreen(d);
     int width = DisplayWidth(d, screen);
     int height = DisplayHeight(d, screen);
+    DesktopWindowSelection desktop = xwinwrap_find_desktop_window(d);
+    Window create_parent = RootWindow(d, screen);
+    int depth = CopyFromParent;
+    int flags = CWBackPixel | CWEventMask;
+    Visual *visual = CopyFromParent;
 
-    Window root = RootWindow(d, screen);
+    printf("Selected desktop parent window ID: 0x%lx\n", desktop.desktop);
+    printf("Livepaper create parent window ID: 0x%lx\n", create_parent);
+    printf("xwinwrap root window ID: 0x%lx\n", desktop.root);
+    printf("__SWM_VROOT found: %s\n", desktop.swm_vroot_found ? "yes" : "no");
+    printf("Nemo desktop found: %s\n", desktop.nemo_found ? "yes" : "no");
 
-    Window win = XCreateSimpleWindow(
+    XWindowAttributes desktop_attrs;
+    if (XGetWindowAttributes(d, desktop.desktop, &desktop_attrs))
+    {
+        printf(
+            "Selected desktop parent attrs: class=%s depth=%d size=%dx%d\n",
+            desktop_attrs.class == InputOutput ? "InputOutput" :
+            desktop_attrs.class == InputOnly ? "InputOnly" : "unknown",
+            desktop_attrs.depth,
+            desktop_attrs.width,
+            desktop_attrs.height
+        );
+    }
+
+    XSetWindowAttributes attrs;
+    memset(&attrs, 0, sizeof(attrs));
+    attrs.background_pixel = BlackPixel(d, screen);
+    attrs.event_mask = StructureNotifyMask | ExposureMask;
+
+    Window win = XCreateWindow(
         d,
-        root,
+        create_parent,
         0,
         0,
         width,
         height,
         0,
-        BlackPixel(d, screen),
-        BlackPixel(d, screen)
+        depth,
+        InputOutput,
+        visual,
+        flags,
+        &attrs
     );
 
     XStoreName(d, win, "Livepaper");
-
     set_window_type_desktop(d, win);
     set_window_states(d, win);
 
+    XLowerWindow(d, win);
+    int input_passthrough = enable_input_passthrough(d, win);
     XMapWindow(d, win);
     XLowerWindow(d, win);
-    XFlush(d);
+    XSync(d, False);
 
     g_display = d;
     g_window = win;
@@ -688,7 +1014,7 @@ static int run_wallpaper(const LivepaperConfig *cfg)
     if (g_mpv_pid == 0)
     {
         char wid_arg[128];
-        snprintf(wid_arg, sizeof(wid_arg), "--wid=%lu", win);
+        snprintf(wid_arg, sizeof(wid_arg), "--wid=0x%lx", win);
 
         execlp(
             "mpv",
@@ -720,9 +1046,12 @@ static int run_wallpaper(const LivepaperConfig *cfg)
     }
 
     printf("Livepaper started.\n");
-    printf("Window ID: %lu\n", win);
+    printf("Created Livepaper child window ID: 0x%lx\n", win);
+    printf("X Shape input pass-through enabled: %s\n", input_passthrough ? "yes" : "no");
     printf("Livepaper PID: %d\n", getpid());
     printf("MPV PID: %d\n", g_mpv_pid);
+
+    refresh_muffin_stacking_once(d, win);
 
     while (1)
     {

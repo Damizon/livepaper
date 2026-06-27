@@ -10,7 +10,7 @@ GUI_OUT = livepaper-gui
 
 CFLAGS ?= -Wall -O2
 CPPFLAGS ?= -Iinclude
-X11_LIBS = -lX11 -lXrandr
+X11_LIBS = -lX11 -lXrandr -lXext
 GTK_CFLAGS := $(shell $(PKG_CONFIG) --cflags gtk4)
 GTK_LIBS := $(shell $(PKG_CONFIG) --libs gtk4)
 
