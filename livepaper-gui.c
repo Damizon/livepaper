@@ -44,14 +44,45 @@ static void set_status(const char *text)
     gtk_label_set_text(GTK_LABEL(status_label), text);
 }
 
-static void run_command(const char *cmd)
+static int run_command(const char *cmd)
 {
     int ret = system(cmd);
 
     if (ret == 0)
+    {
         set_status("Done.");
-    else
-        set_status("Command failed.");
+        return 1;
+    }
+
+    set_status("Command failed.");
+    return 0;
+}
+
+static char *get_livepaper_command(void)
+{
+    char exe_path[PATH_MAX];
+    ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+
+    if (len > 0)
+    {
+        exe_path[len] = '\0';
+
+        char *exe_dir = g_path_get_dirname(exe_path);
+        char *candidate = g_build_filename(exe_dir, "livepaper", NULL);
+
+        if (access(candidate, X_OK) == 0)
+        {
+            char *quoted = g_shell_quote(candidate);
+            g_free(candidate);
+            g_free(exe_dir);
+            return quoted;
+        }
+
+        g_free(candidate);
+        g_free(exe_dir);
+    }
+
+    return g_strdup("livepaper");
 }
 
 static void create_thumbnail(const char *video_path, char *thumb_path, size_t size)
@@ -65,28 +96,39 @@ static void create_thumbnail(const char *video_path, char *thumb_path, size_t si
             safe_name[i] = '_';
     }
 
-    snprintf(
-        thumb_path,
-        size,
-        "%s/%s.jpg",
-        make_home_path(THUMB_DIR),
-        safe_name
-    );
+    char *thumb_name = g_strdup_printf("%s.jpg", safe_name);
+    char *built_thumb_path = g_build_filename(make_home_path(THUMB_DIR), thumb_name, NULL);
+    g_strlcpy(thumb_path, built_thumb_path, size);
+    g_free(thumb_name);
+    g_free(built_thumb_path);
+
+    if (strlen(thumb_path) >= size - 1)
+        return;
 
     if (access(thumb_path, F_OK) == 0)
         return;
 
     char cmd[PATH_MAX * 3];
+    char *quoted_video = g_shell_quote(video_path);
+    char *quoted_thumb = g_shell_quote(thumb_path);
 
     snprintf(
         cmd,
         sizeof(cmd),
-        "ffmpegthumbnailer -i \"%s\" -o \"%s\" -s 220 -q 8 >/dev/null 2>&1",
-        video_path,
-        thumb_path
+        "ffmpegthumbnailer -i %s -o %s -s 220 -q 8 >/dev/null 2>&1",
+        quoted_video,
+        quoted_thumb
     );
 
-    system(cmd);
+    if (system(cmd) != 0)
+    {
+        g_free(quoted_video);
+        g_free(quoted_thumb);
+        return;
+    }
+
+    g_free(quoted_video);
+    g_free(quoted_thumb);
 }
 
 static void save_delay_to_config(int delay)
@@ -107,12 +149,12 @@ static void save_delay_to_config(int delay)
         {
             if (strncmp(line, "wallpaper=", 10) == 0)
             {
-                strncpy(wallpaper, line + 10, sizeof(wallpaper) - 1);
+                g_strlcpy(wallpaper, line + 10, sizeof(wallpaper));
                 wallpaper[strcspn(wallpaper, "\n")] = 0;
             }
             else if (strncmp(line, "monitor=", 8) == 0)
             {
-                strncpy(monitor, line + 8, sizeof(monitor) - 1);
+                g_strlcpy(monitor, line + 8, sizeof(monitor));
                 monitor[strcspn(monitor, "\n")] = 0;
             }
         }
@@ -151,6 +193,8 @@ static void clear_grid(void)
 
 static void on_wallpaper_clicked(GtkButton *button, gpointer data)
 {
+    (void)data;
+
     const char *path = g_object_get_data(G_OBJECT(button), "wallpaper-path");
 
     if (!path)
@@ -230,7 +274,12 @@ static void refresh_wallpapers(void)
             continue;
 
         char full_path[PATH_MAX];
-        snprintf(full_path, sizeof(full_path), "%s/%s", folder, entry->d_name);
+        char *built_path = g_build_filename(folder, entry->d_name, NULL);
+        g_strlcpy(full_path, built_path, sizeof(full_path));
+        g_free(built_path);
+
+        if (strlen(full_path) >= sizeof(full_path) - 1)
+            continue;
 
         GtkWidget *card = create_wallpaper_card(entry->d_name, full_path);
 
@@ -255,10 +304,14 @@ static void refresh_monitors(void)
     gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(monitor_combo));
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(monitor_combo), "all");
 
-    FILE *fp = popen("./livepaper monitors", "r");
+    char *livepaper_cmd = get_livepaper_command();
+    char *cmd = g_strdup_printf("%s monitors", livepaper_cmd);
+    FILE *fp = popen(cmd, "r");
 
     if (!fp)
     {
+        g_free(cmd);
+        g_free(livepaper_cmd);
         gtk_combo_box_set_active(GTK_COMBO_BOX(monitor_combo), 0);
         return;
     }
@@ -279,54 +332,81 @@ static void refresh_monitors(void)
     }
 
     pclose(fp);
+    g_free(cmd);
+    g_free(livepaper_cmd);
 
     gtk_combo_box_set_active(GTK_COMBO_BOX(monitor_combo), 0);
 }
 
 static void on_apply_clicked(GtkButton *button, gpointer data)
 {
+    (void)button;
+    (void)data;
+
     if (strlen(selected_wallpaper) == 0)
     {
         set_status("Select wallpaper first.");
         return;
     }
 
-    const char *monitor = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(monitor_combo));
+    char *monitor = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(monitor_combo));
 
     if (!monitor)
-        monitor = "all";
+        monitor = g_strdup("all");
 
     int delay = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(delay_spin));
     save_delay_to_config(delay);
 
-    char cmd[PATH_MAX * 2];
-
-    snprintf(
-        cmd,
-        sizeof(cmd),
-        "./livepaper apply \"%s\" \"%s\" && ./livepaper stop && ./livepaper start",
-        selected_wallpaper,
-        monitor
+    char *livepaper_cmd = get_livepaper_command();
+    char *quoted_wallpaper = g_shell_quote(selected_wallpaper);
+    char *quoted_monitor = g_shell_quote(monitor);
+    char *cmd = g_strdup_printf(
+        "%s apply %s %s && %s stop && %s start",
+        livepaper_cmd,
+        quoted_wallpaper,
+        quoted_monitor,
+        livepaper_cmd,
+        livepaper_cmd
     );
 
-    run_command(cmd);
-    set_status("Wallpaper applied and started.");
+    if (run_command(cmd))
+        set_status("Wallpaper applied and started.");
+
+    g_free(cmd);
+    g_free(livepaper_cmd);
+    g_free(quoted_wallpaper);
+    g_free(quoted_monitor);
+    g_free(monitor);
 }
 
 static void on_stop_clicked(GtkButton *button, gpointer data)
 {
-    run_command("./livepaper stop");
-    set_status("Wallpaper stopped.");
+    (void)button;
+    (void)data;
+
+    char *livepaper_cmd = get_livepaper_command();
+    char *cmd = g_strdup_printf("%s stop", livepaper_cmd);
+
+    if (run_command(cmd))
+        set_status("Wallpaper stopped.");
+
+    g_free(cmd);
+    g_free(livepaper_cmd);
 }
 
 static void on_refresh_clicked(GtkButton *button, gpointer data)
 {
+    (void)button;
+    (void)data;
+
     refresh_wallpapers();
     refresh_monitors();
 }
 
 static void app_activate(GtkApplication *app, gpointer user_data)
 {
+    (void)user_data;
+
     GtkWidget *window = gtk_application_window_new(app);
 
     gtk_window_set_title(GTK_WINDOW(window), "Livepaper");
@@ -373,7 +453,7 @@ static void app_activate(GtkApplication *app, gpointer user_data)
     GtkWidget *delay_label = gtk_label_new("Delay after login:");
     gtk_widget_set_halign(delay_label, GTK_ALIGN_START);
 
-    delay_spin = gtk_spin_button_new_with_range(0, 120, 1);
+    delay_spin = gtk_spin_button_new_with_range(0, 5, 1);
     gtk_spin_button_set_value(GTK_SPIN_BUTTON(delay_spin), 5);
 
     gtk_grid_attach(GTK_GRID(settings_grid), monitor_label, 0, 0, 1, 1);

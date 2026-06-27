@@ -59,19 +59,52 @@ static void build_paths(void)
     }
 }
 
+static void mkdir_p(const char *path)
+{
+    char tmp[PATH_BUF];
+
+    if (!safe_snprintf(tmp, sizeof(tmp), "%s", path))
+    {
+        fprintf(stderr, "Path is too long: %s\n", path);
+        exit(1);
+    }
+
+    for (char *p = tmp + 1; *p; p++)
+    {
+        if (*p == '/')
+        {
+            *p = '\0';
+
+            if (mkdir(tmp, 0755) != 0 && errno != EEXIST)
+            {
+                perror(tmp);
+                exit(1);
+            }
+
+            *p = '/';
+        }
+    }
+
+    if (mkdir(tmp, 0755) != 0 && errno != EEXIST)
+    {
+        perror(tmp);
+        exit(1);
+    }
+}
+
 static void ensure_dirs(void)
 {
     const char *home = getenv("HOME");
     char autostart_dir[PATH_BUF];
     char wallpaper_dir[PATH_BUF];
 
-    mkdir(g_paths.config_dir, 0755);
+    mkdir_p(g_paths.config_dir);
 
     if (safe_snprintf(autostart_dir, sizeof(autostart_dir), "%s/.config/autostart", home))
-        mkdir(autostart_dir, 0755);
+        mkdir_p(autostart_dir);
 
     if (safe_snprintf(wallpaper_dir, sizeof(wallpaper_dir), "%s/Wideo/Livepaper", home))
-        mkdir(wallpaper_dir, 0755);
+        mkdir_p(wallpaper_dir);
 }
 
 int process_running(pid_t pid)

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Livepaper
+Comment=Video wallpaper manager for Cinnamon/Nemo desktops
+Exec=livepaper-gui
+Terminal=false
+Categories=Utility;GTK;
+StartupNotify=true
