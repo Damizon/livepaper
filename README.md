@@ -38,7 +38,7 @@ https://github.com/Damizon/livepaper/releases
 Install it with:
 
 ```bash
-sudo apt install ./livepaper_0.4.0_amd64.deb
+sudo apt install ./livepaper_0.4.1_amd64.deb
 ```
 
 After installation, launch **Livepaper** from the application menu.
@@ -130,6 +130,13 @@ The package will be created in:
 ```bash
 build/packages/
 ```
+
+## Release Notes
+
+### 0.4.1
+
+- Fixed Cinnamon/Nemo desktop icon visibility after restarting the desktop session.
+- Improved the X11 desktop backend so the video wallpaper stays behind desktop icons.
 
 ## Notes
 
