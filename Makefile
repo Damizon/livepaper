@@ -10,6 +10,7 @@ SRC = \
 	src/session/autostart.c \
 	src/session/lock.c \
 	src/session/pidfile.c \
+	src/session/runtime.c \
 	src/utils/string_utils.c
 GUI_SRC = livepaper-gui.c
 OUT = livepaper

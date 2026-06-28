@@ -19,6 +19,7 @@
 #include "session/autostart.h"
 #include "session/lock.h"
 #include "session/pidfile.h"
+#include "session/runtime.h"
 
 static Display *g_display = NULL;
 static Window g_window = 0;
@@ -58,13 +59,6 @@ static int desktop_processes_ready(void)
     int cinnamon = command_success("pgrep -x cinnamon >/dev/null 2>&1");
 
     return nemo && cinnamon;
-}
-
-static void remove_runtime_files(void)
-{
-    LivepaperPaths *paths = livepaper_paths();
-    remove(paths->pid_file);
-    release_lock();
 }
 
 static void cleanup(int sig)
