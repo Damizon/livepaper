@@ -16,6 +16,7 @@
 #include "../include/process.h"
 #include "core/config.h"
 #include "core/paths.h"
+#include "session/autostart.h"
 #include "session/lock.h"
 #include "session/pidfile.h"
 
@@ -580,51 +581,6 @@ static void refresh_muffin_stacking_once(Display *d, Window livepaper)
     send_active_window(d, root, nemo);
     pulse_managed_window(d, root);
     force_nemo_above_livepaper(d, livepaper, nemo);
-}
-
-static void create_autostart(void)
-{
-    LivepaperPaths *paths = livepaper_paths();
-    char exe_path[PATH_BUF];
-
-    ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
-    if (len == -1)
-    {
-        fprintf(stderr, "Cannot detect executable path.\n");
-        return;
-    }
-
-    exe_path[len] = '\0';
-
-    FILE *f = fopen(paths->autostart_file, "w");
-    if (!f)
-    {
-        fprintf(stderr, "Cannot create autostart file.\n");
-        return;
-    }
-
-    fprintf(
-        f,
-        "[Desktop Entry]\n"
-        "Type=Application\n"
-        "Name=Livepaper\n"
-        "Exec=%s start\n"
-        "Hidden=false\n"
-        "NoDisplay=false\n"
-        "X-GNOME-Autostart-enabled=true\n",
-        exe_path
-    );
-
-    fclose(f);
-
-    printf("Autostart enabled.\n");
-}
-
-static void remove_autostart(void)
-{
-    LivepaperPaths *paths = livepaper_paths();
-    remove(paths->autostart_file);
-    printf("Autostart disabled.\n");
 }
 
 static void list_monitors(void)
