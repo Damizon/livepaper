@@ -3,7 +3,10 @@ PKG_CONFIG ?= pkg-config
 PREFIX ?= /usr
 VERSION ?= 0.6.0
 
-SRC = src/main.c
+SRC = \
+	src/main.c \
+	src/core/paths.c \
+	src/utils/string_utils.c
 GUI_SRC = livepaper-gui.c
 OUT = livepaper
 GUI_OUT = livepaper-gui

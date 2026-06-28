@@ -11,19 +11,16 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <stdarg.h>
 #include "../include/config.h"
 #include "../include/process.h"
+#include "core/paths.h"
 
 static Display *g_display = NULL;
 static Window g_window = 0;
 static pid_t g_mpv_pid = -1;
 static int g_lock_fd = -1;
-
-static LivepaperPaths g_paths;
 
 typedef struct DesktopWindowSelection
 {
@@ -34,185 +31,6 @@ typedef struct DesktopWindowSelection
     int nemo_found;
 } DesktopWindowSelection;
 
-
-static int safe_snprintf(char *dst, size_t size, const char *fmt, ...)
-{
-    va_list args;
-    va_start(args, fmt);
-    int ret = vsnprintf(dst, size, fmt, args);
-    va_end(args);
-
-    if (ret < 0 || (size_t)ret >= size)
-        return 0;
-
-    return 1;
-}
-
-static void build_paths(void)
-{
-    const char *home = getenv("HOME");
-
-    if (!home || strlen(home) == 0)
-    {
-        fprintf(stderr, "HOME is not set.\n");
-        exit(1);
-    }
-
-    if (!safe_snprintf(g_paths.config_dir, sizeof(g_paths.config_dir), "%s/.config/livepaper", home) ||
-        !safe_snprintf(g_paths.config_file, sizeof(g_paths.config_file), "%s/config.ini", g_paths.config_dir) ||
-        !safe_snprintf(g_paths.pid_file, sizeof(g_paths.pid_file), "%s/livepaper.pid", g_paths.config_dir) ||
-        !safe_snprintf(g_paths.lock_file, sizeof(g_paths.lock_file), "%s/livepaper.lock", g_paths.config_dir) ||
-        !safe_snprintf(g_paths.autostart_file, sizeof(g_paths.autostart_file), "%s/.config/autostart/livepaper.desktop", home))
-    {
-        fprintf(stderr, "Path is too long.\n");
-        exit(1);
-    }
-}
-
-static void mkdir_p(const char *path)
-{
-    char tmp[PATH_BUF];
-
-    if (!safe_snprintf(tmp, sizeof(tmp), "%s", path))
-    {
-        fprintf(stderr, "Path is too long: %s\n", path);
-        exit(1);
-    }
-
-    for (char *p = tmp + 1; *p; p++)
-    {
-        if (*p == '/')
-        {
-            *p = '\0';
-
-            if (mkdir(tmp, 0755) != 0 && errno != EEXIST)
-            {
-                perror(tmp);
-                exit(1);
-            }
-
-            *p = '/';
-        }
-    }
-
-    if (mkdir(tmp, 0755) != 0 && errno != EEXIST)
-    {
-        perror(tmp);
-        exit(1);
-    }
-}
-
-static int read_xdg_videos_dir(char *dst, size_t size)
-{
-    const char *home = getenv("HOME");
-    char config_file[PATH_BUF];
-    FILE *f;
-    char line[PATH_BUF];
-
-    if (!home || !safe_snprintf(config_file, sizeof(config_file), "%s/.config/user-dirs.dirs", home))
-        return 0;
-
-    f = fopen(config_file, "r");
-    if (!f)
-        return 0;
-
-    while (fgets(line, sizeof(line), f))
-    {
-        const char *prefix = "XDG_VIDEOS_DIR=\"";
-        char *value;
-        char *end;
-        char expanded[PATH_BUF];
-
-        if (strncmp(line, prefix, strlen(prefix)) != 0)
-            continue;
-
-        value = line + strlen(prefix);
-        end = strchr(value, '"');
-        if (!end)
-            break;
-        *end = '\0';
-
-        if (strcmp(value, "$HOME") == 0)
-        {
-            if (!safe_snprintf(expanded, sizeof(expanded), "%s", home))
-                break;
-            value = expanded;
-        }
-        else if (strncmp(value, "$HOME/", 6) == 0)
-        {
-            if (!safe_snprintf(expanded, sizeof(expanded), "%s%s", home, value + 5))
-                break;
-            value = expanded;
-        }
-        else if (strcmp(value, "${HOME}") == 0)
-        {
-            if (!safe_snprintf(expanded, sizeof(expanded), "%s", home))
-                break;
-            value = expanded;
-        }
-        else if (strncmp(value, "${HOME}/", 8) == 0)
-        {
-            if (!safe_snprintf(expanded, sizeof(expanded), "%s%s", home, value + 7))
-                break;
-            value = expanded;
-        }
-        else if (value[0] != '/')
-        {
-            if (!safe_snprintf(expanded, sizeof(expanded), "%s/%s", home, value))
-                break;
-            value = expanded;
-        }
-
-        if (strcmp(value, home) == 0)
-            break;
-
-        if (!safe_snprintf(dst, size, "%s", value))
-            break;
-
-        fclose(f);
-        return 1;
-    }
-
-    fclose(f);
-    return 0;
-}
-
-static void build_wallpaper_dir(char *dst, size_t size)
-{
-    const char *home = getenv("HOME");
-    char videos_dir[PATH_BUF];
-
-    if (read_xdg_videos_dir(videos_dir, sizeof(videos_dir)))
-    {
-        if (!safe_snprintf(dst, size, "%s/Livepaper", videos_dir))
-        {
-            fprintf(stderr, "Path is too long.\n");
-            exit(1);
-        }
-        return;
-    }
-
-    if (!safe_snprintf(dst, size, "%s/Videos/Livepaper", home))
-    {
-        fprintf(stderr, "Path is too long.\n");
-        exit(1);
-    }
-}
-
-static void ensure_dirs(void)
-{
-    const char *home = getenv("HOME");
-    char autostart_dir[PATH_BUF];
-    char wallpaper_dir[PATH_BUF];
-
-    mkdir_p(g_paths.config_dir);
-
-    if (safe_snprintf(autostart_dir, sizeof(autostart_dir), "%s/.config/autostart", home))
-        mkdir_p(autostart_dir);
-
-    build_wallpaper_dir(wallpaper_dir, sizeof(wallpaper_dir));
-    mkdir_p(wallpaper_dir);
-}
 
 int process_running(pid_t pid)
 {
@@ -242,7 +60,8 @@ static int desktop_processes_ready(void)
 
 static pid_t read_pid(void)
 {
-    FILE *f = fopen(g_paths.pid_file, "r");
+    LivepaperPaths *paths = livepaper_paths();
+    FILE *f = fopen(paths->pid_file, "r");
     if (!f)
         return -1;
 
@@ -260,10 +79,11 @@ static pid_t read_pid(void)
 
 static void write_pid(pid_t pid)
 {
-    FILE *f = fopen(g_paths.pid_file, "w");
+    LivepaperPaths *paths = livepaper_paths();
+    FILE *f = fopen(paths->pid_file, "w");
     if (!f)
     {
-        fprintf(stderr, "Cannot write PID file: %s\n", g_paths.pid_file);
+        fprintf(stderr, "Cannot write PID file: %s\n", paths->pid_file);
         return;
     }
 
@@ -273,7 +93,8 @@ static void write_pid(pid_t pid)
 
 static int acquire_lock(void)
 {
-    g_lock_fd = open(g_paths.lock_file, O_CREAT | O_RDWR, 0644);
+    LivepaperPaths *paths = livepaper_paths();
+    g_lock_fd = open(paths->lock_file, O_CREAT | O_RDWR, 0644);
 
     if (g_lock_fd < 0)
     {
@@ -312,7 +133,8 @@ static void release_lock(void)
 
 static void remove_runtime_files(void)
 {
-    remove(g_paths.pid_file);
+    LivepaperPaths *paths = livepaper_paths();
+    remove(paths->pid_file);
     release_lock();
 }
 
@@ -834,6 +656,8 @@ static void refresh_muffin_stacking_once(Display *d, Window livepaper)
 
 static void save_config(const char *wallpaper, const char *monitor, int delay)
 {
+    LivepaperPaths *paths = livepaper_paths();
+
     ensure_dirs();
 
     if (delay < 0)
@@ -844,7 +668,7 @@ static void save_config(const char *wallpaper, const char *monitor, int delay)
     if (delay > 5)
         delay = 5;
 
-    FILE *f = fopen(g_paths.config_file, "w");
+    FILE *f = fopen(paths->config_file, "w");
     if (!f)
     {
         fprintf(stderr, "Cannot write config file.\n");
@@ -856,12 +680,13 @@ static void save_config(const char *wallpaper, const char *monitor, int delay)
     fprintf(f, "delay=%d\n", delay);
     fclose(f);
 
-    printf("Config saved:\n%s\n", g_paths.config_file);
+    printf("Config saved:\n%s\n", paths->config_file);
 }
 
 static int load_config(LivepaperConfig *cfg)
 {
-    FILE *f = fopen(g_paths.config_file, "r");
+    LivepaperPaths *paths = livepaper_paths();
+    FILE *f = fopen(paths->config_file, "r");
     if (!f)
         return 0;
 
@@ -902,6 +727,7 @@ static int load_config(LivepaperConfig *cfg)
 
 static void create_autostart(void)
 {
+    LivepaperPaths *paths = livepaper_paths();
     char exe_path[PATH_BUF];
 
     ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
@@ -913,7 +739,7 @@ static void create_autostart(void)
 
     exe_path[len] = '\0';
 
-    FILE *f = fopen(g_paths.autostart_file, "w");
+    FILE *f = fopen(paths->autostart_file, "w");
     if (!f)
     {
         fprintf(stderr, "Cannot create autostart file.\n");
@@ -939,7 +765,8 @@ static void create_autostart(void)
 
 static void remove_autostart(void)
 {
-    remove(g_paths.autostart_file);
+    LivepaperPaths *paths = livepaper_paths();
+    remove(paths->autostart_file);
     printf("Autostart disabled.\n");
 }
 
@@ -1163,8 +990,9 @@ static void start_livepaper(void)
 
     if (old_pid > 0)
     {
+        LivepaperPaths *paths = livepaper_paths();
         printf("Removing stale PID file.\n");
-        remove(g_paths.pid_file);
+        remove(paths->pid_file);
     }
 
     LivepaperConfig cfg;
