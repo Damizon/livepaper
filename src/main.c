@@ -17,6 +17,7 @@
 #include "../include/process.h"
 #include "core/config.h"
 #include "core/paths.h"
+#include "session/pidfile.h"
 
 static Display *g_display = NULL;
 static Window g_window = 0;
@@ -57,39 +58,6 @@ static int desktop_processes_ready(void)
     int cinnamon = command_success("pgrep -x cinnamon >/dev/null 2>&1");
 
     return nemo && cinnamon;
-}
-
-static pid_t read_pid(void)
-{
-    LivepaperPaths *paths = livepaper_paths();
-    FILE *f = fopen(paths->pid_file, "r");
-    if (!f)
-        return -1;
-
-    long pid = -1;
-    if (fscanf(f, "%ld", &pid) != 1)
-        pid = -1;
-
-    fclose(f);
-
-    if (pid <= 0)
-        return -1;
-
-    return (pid_t)pid;
-}
-
-static void write_pid(pid_t pid)
-{
-    LivepaperPaths *paths = livepaper_paths();
-    FILE *f = fopen(paths->pid_file, "w");
-    if (!f)
-    {
-        fprintf(stderr, "Cannot write PID file: %s\n", paths->pid_file);
-        return;
-    }
-
-    fprintf(f, "%d\n", pid);
-    fclose(f);
 }
 
 static int acquire_lock(void)
