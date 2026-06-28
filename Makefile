@@ -1,7 +1,7 @@
 CC ?= gcc
 PKG_CONFIG ?= pkg-config
 PREFIX ?= /usr
-VERSION ?= 0.4.1
+VERSION ?= 0.5.0
 
 SRC = src/main.c
 GUI_SRC = livepaper-gui.c

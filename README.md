@@ -34,8 +34,8 @@ Runtime dependencies are handled by the `.deb` package:
 Download the `.deb` package from GitHub Releases and install it:
 
 ```bash
-curl -LO https://github.com/Damizon/livepaper/releases/download/v0.4.1/livepaper_0.4.1_amd64.deb
-sudo apt install ./livepaper_0.4.1_amd64.deb
+curl -LO https://github.com/Damizon/livepaper/releases/download/v0.5.0/livepaper_0.5.0_amd64.deb
+sudo apt install ./livepaper_0.5.0_amd64.deb
 ```
 
 Or clone the repository, build the package, and install the generated `.deb`:
@@ -44,7 +44,7 @@ Or clone the repository, build the package, and install the generated `.deb`:
 git clone https://github.com/Damizon/livepaper.git
 cd livepaper
 make deb
-sudo apt install ./build/packages/livepaper_0.4.1_amd64.deb
+sudo apt install ./build/packages/livepaper_0.5.0_amd64.deb
 ```
 
 After installation, launch **Livepaper** from the application menu.
@@ -78,7 +78,7 @@ Supported extensions in the GUI:
 Apply a wallpaper:
 
 ```bash
-livepaper apply ~/Wideo/Livepaper/wallpaper.mp4 all 1
+livepaper apply ~/Wideo/Livepaper/wallpaper.mp4 all
 ```
 
 Start Livepaper:
@@ -138,6 +138,11 @@ build/packages/
 ```
 
 ## Release Notes
+
+### 0.5.0
+
+- Simplified the GTK interface by removing the delay-after-login option.
+- Default startup delay is now `0` seconds.
 
 ### 0.4.1
 

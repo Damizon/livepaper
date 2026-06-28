@@ -739,24 +739,8 @@ static void save_config(const char *wallpaper, const char *monitor, int delay)
 {
     ensure_dirs();
 
-    FILE *old = fopen(g_paths.config_file, "r");
-    int existing_delay = 5;
-
-    if (old)
-    {
-        char line[PATH_BUF];
-
-        while (fgets(line, sizeof(line), old))
-        {
-            if (strncmp(line, "delay=", 6) == 0)
-                existing_delay = atoi(line + 6);
-        }
-
-        fclose(old);
-    }
-
     if (delay < 0)
-        delay = existing_delay;
+        delay = 0;
 
     if (delay < 0)
         delay = 0;
@@ -1090,7 +1074,7 @@ static void start_livepaper(void)
     if (!load_config(&cfg))
     {
         fprintf(stderr, "No wallpaper configured. Use:\n");
-        fprintf(stderr, "  livepaper apply /path/to/video.mp4 [monitor] [delay]\n");
+        fprintf(stderr, "  livepaper apply /path/to/video.mp4 [monitor]\n");
         exit(1);
     }
 
@@ -1182,13 +1166,13 @@ static void print_help(void)
     printf(
         "Livepaper\n\n"
         "Usage:\n"
-        "  livepaper apply <video_path> [monitor] [extra_delay_0_5]\n"
+        "  livepaper apply <video_path> [monitor]\n"
         "  livepaper start\n"
         "  livepaper stop\n"
         "  livepaper status\n"
         "  livepaper monitors\n\n"
         "Examples:\n"
-        "  livepaper apply ~/Wideo/Livepaper/wallpaper.mp4 all 1\n"
+        "  livepaper apply ~/Wideo/Livepaper/wallpaper.mp4 all\n"
         "  livepaper start\n"
         "  livepaper stop\n"
     );

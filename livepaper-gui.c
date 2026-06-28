@@ -13,7 +13,6 @@
 
 GtkWidget *wallpaper_grid;
 GtkWidget *monitor_combo;
-GtkWidget *delay_spin;
 GtkWidget *status_label;
 
 char selected_wallpaper[PATH_MAX] = "";
@@ -37,6 +36,53 @@ static int is_video_file(const char *name)
            g_ascii_strcasecmp(ext, ".webm") == 0 ||
            g_ascii_strcasecmp(ext, ".mov") == 0 ||
            g_ascii_strcasecmp(ext, ".avi") == 0;
+}
+
+static void load_css(void)
+{
+    GtkCssProvider *provider = gtk_css_provider_new();
+    const char *css =
+        ".path-bar {"
+        "  border: 1px solid alpha(currentColor, 0.25);"
+        "  border-radius: 8px;"
+        "  padding: 8px;"
+        "}"
+        ".button-refresh,"
+        ".button-apply,"
+        ".button-stop {"
+        "  min-height: 38px;"
+        "  min-width: 92px;"
+        "  padding: 8px 16px;"
+        "}"
+        ".button-refresh {"
+        "  background: #38bdf8;"
+        "  color: #082f49;"
+        "}"
+        ".button-refresh:hover {"
+        "  background: #7dd3fc;"
+        "}"
+        ".button-apply {"
+        "  background: #22c55e;"
+        "  color: #052e16;"
+        "}"
+        ".button-apply:hover {"
+        "  background: #4ade80;"
+        "}"
+        ".button-stop {"
+        "  background: #ef4444;"
+        "  color: #450a0a;"
+        "}"
+        ".button-stop:hover {"
+        "  background: #f87171;"
+        "}";
+
+    gtk_css_provider_load_from_string(provider, css);
+    gtk_style_context_add_provider_for_display(
+        gdk_display_get_default(),
+        GTK_STYLE_PROVIDER(provider),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION
+    );
+    g_object_unref(provider);
 }
 
 static void set_status(const char *text)
@@ -129,54 +175,6 @@ static void create_thumbnail(const char *video_path, char *thumb_path, size_t si
 
     g_free(quoted_video);
     g_free(quoted_thumb);
-}
-
-static void save_delay_to_config(int delay)
-{
-    char config_path[PATH_MAX];
-    snprintf(config_path, sizeof(config_path), "%s", make_home_path(CONFIG_FILE));
-
-    FILE *in = fopen(config_path, "r");
-
-    char wallpaper[PATH_MAX] = "";
-    char monitor[256] = "all";
-
-    if (in)
-    {
-        char line[2048];
-
-        while (fgets(line, sizeof(line), in))
-        {
-            if (strncmp(line, "wallpaper=", 10) == 0)
-            {
-                g_strlcpy(wallpaper, line + 10, sizeof(wallpaper));
-                wallpaper[strcspn(wallpaper, "\n")] = 0;
-            }
-            else if (strncmp(line, "monitor=", 8) == 0)
-            {
-                g_strlcpy(monitor, line + 8, sizeof(monitor));
-                monitor[strcspn(monitor, "\n")] = 0;
-            }
-        }
-
-        fclose(in);
-    }
-
-    g_mkdir_with_parents(make_home_path(CONFIG_DIR), 0755);
-
-    FILE *out = fopen(config_path, "w");
-
-    if (!out)
-    {
-        set_status("Cannot write config.ini.");
-        return;
-    }
-
-    fprintf(out, "wallpaper=%s\n", wallpaper);
-    fprintf(out, "monitor=%s\n", monitor);
-    fprintf(out, "delay=%d\n", delay);
-
-    fclose(out);
 }
 
 static void clear_grid(void)
@@ -354,14 +352,11 @@ static void on_apply_clicked(GtkButton *button, gpointer data)
     if (!monitor)
         monitor = g_strdup("all");
 
-    int delay = gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(delay_spin));
-    save_delay_to_config(delay);
-
     char *livepaper_cmd = get_livepaper_command();
     char *quoted_wallpaper = g_shell_quote(selected_wallpaper);
     char *quoted_monitor = g_shell_quote(monitor);
     char *cmd = g_strdup_printf(
-        "%s apply %s %s && %s stop && %s start",
+        "%s apply %s %s 0 && %s stop && %s start",
         livepaper_cmd,
         quoted_wallpaper,
         quoted_monitor,
@@ -407,6 +402,8 @@ static void app_activate(GtkApplication *app, gpointer user_data)
 {
     (void)user_data;
 
+    load_css();
+
     GtkWidget *window = gtk_application_window_new(app);
 
     gtk_window_set_title(GTK_WINDOW(window), "Livepaper");
@@ -423,9 +420,20 @@ static void app_activate(GtkApplication *app, gpointer user_data)
     gtk_widget_set_halign(title, GTK_ALIGN_START);
     gtk_box_append(GTK_BOX(main_box), title);
 
+    GtkWidget *folder_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     GtkWidget *folder_label = gtk_label_new(make_home_path(WALLPAPER_DIR));
+    GtkWidget *refresh_button = gtk_button_new_with_label("Refresh");
+
+    gtk_widget_add_css_class(folder_box, "path-bar");
     gtk_widget_set_halign(folder_label, GTK_ALIGN_START);
-    gtk_box_append(GTK_BOX(main_box), folder_label);
+    gtk_widget_set_hexpand(folder_label, TRUE);
+    gtk_label_set_ellipsize(GTK_LABEL(folder_label), PANGO_ELLIPSIZE_MIDDLE);
+
+    gtk_widget_add_css_class(refresh_button, "button-refresh");
+
+    gtk_box_append(GTK_BOX(folder_box), folder_label);
+    gtk_box_append(GTK_BOX(folder_box), refresh_button);
+    gtk_box_append(GTK_BOX(main_box), folder_box);
 
     GtkWidget *scrolled = gtk_scrolled_window_new();
     gtk_widget_set_vexpand(scrolled, TRUE);
@@ -450,28 +458,27 @@ static void app_activate(GtkApplication *app, gpointer user_data)
 
     monitor_combo = gtk_combo_box_text_new();
 
-    GtkWidget *delay_label = gtk_label_new("Delay after login:");
-    gtk_widget_set_halign(delay_label, GTK_ALIGN_START);
-
-    delay_spin = gtk_spin_button_new_with_range(0, 5, 1);
-    gtk_spin_button_set_value(GTK_SPIN_BUTTON(delay_spin), 5);
-
     gtk_grid_attach(GTK_GRID(settings_grid), monitor_label, 0, 0, 1, 1);
     gtk_grid_attach(GTK_GRID(settings_grid), monitor_combo, 1, 0, 1, 1);
-    gtk_grid_attach(GTK_GRID(settings_grid), delay_label, 0, 1, 1, 1);
-    gtk_grid_attach(GTK_GRID(settings_grid), delay_spin, 1, 1, 1, 1);
-
-    gtk_box_append(GTK_BOX(main_box), settings_grid);
 
     GtkWidget *button_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
 
-    GtkWidget *apply_button = gtk_button_new_with_label("Apply and Start");
+    GtkWidget *apply_button = gtk_button_new_with_label("Apply");
     GtkWidget *stop_button = gtk_button_new_with_label("Stop");
-    GtkWidget *refresh_button = gtk_button_new_with_label("Refresh");
+    GtkWidget *button_spacer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
 
-    gtk_box_append(GTK_BOX(button_box), apply_button);
+    gtk_widget_set_hexpand(button_spacer, TRUE);
+    gtk_widget_set_halign(settings_grid, GTK_ALIGN_END);
+    gtk_widget_set_halign(apply_button, GTK_ALIGN_END);
+    gtk_widget_set_halign(stop_button, GTK_ALIGN_START);
+
+    gtk_widget_add_css_class(apply_button, "button-apply");
+    gtk_widget_add_css_class(stop_button, "button-stop");
+
+    gtk_box_append(GTK_BOX(main_box), settings_grid);
     gtk_box_append(GTK_BOX(button_box), stop_button);
-    gtk_box_append(GTK_BOX(button_box), refresh_button);
+    gtk_box_append(GTK_BOX(button_box), button_spacer);
+    gtk_box_append(GTK_BOX(button_box), apply_button);
 
     gtk_box_append(GTK_BOX(main_box), button_box);
 
