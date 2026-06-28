@@ -2,7 +2,7 @@
 set -eu
 
 PACKAGE=livepaper
-VERSION=${VERSION:-0.5.1}
+VERSION=${VERSION:-0.6.0}
 ARCH=$(dpkg --print-architecture)
 ROOT=build/deb-root
 OUTDIR=build/packages

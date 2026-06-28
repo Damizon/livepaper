@@ -34,8 +34,8 @@ Runtime dependencies are handled by the `.deb` package:
 Download the `.deb` package from GitHub Releases and install it:
 
 ```bash
-curl -LO https://github.com/Damizon/livepaper/releases/download/v0.5.1/livepaper_0.5.1_amd64.deb
-sudo apt install ./livepaper_0.5.1_amd64.deb
+curl -LO https://github.com/Damizon/livepaper/releases/download/v0.6.0/livepaper_0.6.0_amd64.deb
+sudo apt install ./livepaper_0.6.0_amd64.deb
 ```
 
 Or clone the repository, build the package, and install the generated `.deb`:
@@ -44,7 +44,7 @@ Or clone the repository, build the package, and install the generated `.deb`:
 git clone https://github.com/Damizon/livepaper.git
 cd livepaper
 make deb
-sudo apt install ./build/packages/livepaper_0.5.1_amd64.deb
+sudo apt install ./build/packages/livepaper_0.6.0_amd64.deb
 ```
 
 After installation, launch **Livepaper** from the application menu.
@@ -142,6 +142,14 @@ build/packages/
 ```
 
 ## Release Notes
+
+### 0.6.0
+
+- Fixed display sleep/blanking while Livepaper is active by disabling mpv's
+  screensaver inhibition.
+- Kept the stable Cinnamon/Nemo desktop backend unchanged.
+- Removed obsolete local build/test-era source files that are no longer used by
+  the current Makefile.
 
 ### 0.5.1
 
