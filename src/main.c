@@ -1106,6 +1106,7 @@ static int run_wallpaper(const LivepaperConfig *cfg)
             "--no-audio",
             "--no-border",
             "--no-resume-playback",
+            "--stop-screensaver=no",
 
             "--osc=no",
             "--osd-level=0",
