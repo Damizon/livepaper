@@ -6,7 +6,7 @@ and a command-line tool.
 
 ## Features
 
-- GTK wallpaper picker for videos stored in `~/Wideo/Livepaper`
+- GTK wallpaper picker for videos stored in your Videos folder under `Livepaper`
 - CLI for applying, starting, stopping, and checking the wallpaper service
 - Multi-monitor discovery through XRandR
 - Autostart entry creation after starting a wallpaper
@@ -34,8 +34,8 @@ Runtime dependencies are handled by the `.deb` package:
 Download the `.deb` package from GitHub Releases and install it:
 
 ```bash
-curl -LO https://github.com/Damizon/livepaper/releases/download/v0.5.0/livepaper_0.5.0_amd64.deb
-sudo apt install ./livepaper_0.5.0_amd64.deb
+curl -LO https://github.com/Damizon/livepaper/releases/download/v0.5.1/livepaper_0.5.1_amd64.deb
+sudo apt install ./livepaper_0.5.1_amd64.deb
 ```
 
 Or clone the repository, build the package, and install the generated `.deb`:
@@ -44,18 +44,22 @@ Or clone the repository, build the package, and install the generated `.deb`:
 git clone https://github.com/Damizon/livepaper.git
 cd livepaper
 make deb
-sudo apt install ./build/packages/livepaper_0.5.0_amd64.deb
+sudo apt install ./build/packages/livepaper_0.5.1_amd64.deb
 ```
 
 After installation, launch **Livepaper** from the application menu.
 
 ## Wallpaper Folder
 
-Put your video wallpapers here:
+Put your video wallpapers in the `Livepaper` folder inside your system Videos directory:
 
 ```bash
-~/Wideo/Livepaper
+~/Videos/Livepaper
 ```
+
+On localized systems this may be a translated Videos directory, for example
+`~/Wideo/Livepaper` or `~/Vidéos/Livepaper`. Livepaper uses the system XDG
+Videos location when it is available.
 
 Supported extensions in the GUI:
 
@@ -67,7 +71,7 @@ Supported extensions in the GUI:
 
 ## GUI Usage
 
-1. Copy video files into `~/Wideo/Livepaper`.
+1. Copy video files into the `Livepaper` folder inside your Videos folder.
 2. Open **Livepaper**.
 3. Select a video.
 4. Choose a monitor or leave `all`.
@@ -78,7 +82,7 @@ Supported extensions in the GUI:
 Apply a wallpaper:
 
 ```bash
-livepaper apply ~/Wideo/Livepaper/wallpaper.mp4 all
+livepaper apply ~/Videos/Livepaper/wallpaper.mp4 all
 ```
 
 Start Livepaper:
@@ -138,6 +142,12 @@ build/packages/
 ```
 
 ## Release Notes
+
+### 0.5.1
+
+- Added the Livepaper application icon for the GTK window, application menu,
+  taskbar, and installed desktop entry.
+- Installed Livepaper icons into the hicolor icon theme in Debian packages.
 
 ### 0.5.0
 

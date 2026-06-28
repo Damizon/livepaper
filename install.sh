@@ -41,7 +41,11 @@ install_build_deps()
 
 install_build_deps
 
-mkdir -p "$HOME/Wideo/Livepaper"
+VIDEOS_DIR="$(xdg-user-dir VIDEOS 2>/dev/null || true)"
+if [ -z "$VIDEOS_DIR" ] || [ "$VIDEOS_DIR" = "$HOME" ]; then
+    VIDEOS_DIR="$HOME/Videos"
+fi
+mkdir -p "$VIDEOS_DIR/Livepaper"
 mkdir -p "$HOME/.config/livepaper"
 
 make all
@@ -51,5 +55,9 @@ if command -v update-desktop-database >/dev/null 2>&1; then
     $SUDO update-desktop-database "$PREFIX/share/applications" >/dev/null 2>&1 || true
 fi
 
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    $SUDO gtk-update-icon-cache -q -t -f "$PREFIX/share/icons/hicolor" >/dev/null 2>&1 || true
+fi
+
 echo "Livepaper installed to $PREFIX."
-echo "Wallpaper folder: $HOME/Wideo/Livepaper"
+echo "Wallpaper folder: $VIDEOS_DIR/Livepaper"

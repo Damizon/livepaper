@@ -1,7 +1,7 @@
 CC ?= gcc
 PKG_CONFIG ?= pkg-config
 PREFIX ?= /usr
-VERSION ?= 0.5.0
+VERSION ?= 0.5.1
 
 SRC = src/main.c
 GUI_SRC = livepaper-gui.c
@@ -26,6 +26,12 @@ install: all
 	install -D -m 0755 $(OUT) $(DESTDIR)$(PREFIX)/bin/$(OUT)
 	install -D -m 0755 $(GUI_OUT) $(DESTDIR)$(PREFIX)/bin/$(GUI_OUT)
 	install -D -m 0644 packaging/livepaper.desktop $(DESTDIR)$(PREFIX)/share/applications/livepaper.desktop
+	install -D -m 0644 assets/livepaper-32.png $(DESTDIR)$(PREFIX)/share/icons/hicolor/32x32/apps/livepaper.png
+	install -D -m 0644 assets/livepaper-48.png $(DESTDIR)$(PREFIX)/share/icons/hicolor/48x48/apps/livepaper.png
+	install -D -m 0644 assets/livepaper-64.png $(DESTDIR)$(PREFIX)/share/icons/hicolor/64x64/apps/livepaper.png
+	install -D -m 0644 assets/livepaper-128.png $(DESTDIR)$(PREFIX)/share/icons/hicolor/128x128/apps/livepaper.png
+	install -D -m 0644 assets/livepaper-256.png $(DESTDIR)$(PREFIX)/share/icons/hicolor/256x256/apps/livepaper.png
+	install -D -m 0644 assets/livepaper-512.png $(DESTDIR)$(PREFIX)/share/icons/hicolor/512x512/apps/livepaper.png
 
 deb:
 	VERSION=$(VERSION) ./packaging/build-deb.sh

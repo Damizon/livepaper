@@ -102,6 +102,103 @@ static void mkdir_p(const char *path)
     }
 }
 
+static int read_xdg_videos_dir(char *dst, size_t size)
+{
+    const char *home = getenv("HOME");
+    char config_file[PATH_BUF];
+    FILE *f;
+    char line[PATH_BUF];
+
+    if (!home || !safe_snprintf(config_file, sizeof(config_file), "%s/.config/user-dirs.dirs", home))
+        return 0;
+
+    f = fopen(config_file, "r");
+    if (!f)
+        return 0;
+
+    while (fgets(line, sizeof(line), f))
+    {
+        const char *prefix = "XDG_VIDEOS_DIR=\"";
+        char *value;
+        char *end;
+        char expanded[PATH_BUF];
+
+        if (strncmp(line, prefix, strlen(prefix)) != 0)
+            continue;
+
+        value = line + strlen(prefix);
+        end = strchr(value, '"');
+        if (!end)
+            break;
+        *end = '\0';
+
+        if (strcmp(value, "$HOME") == 0)
+        {
+            if (!safe_snprintf(expanded, sizeof(expanded), "%s", home))
+                break;
+            value = expanded;
+        }
+        else if (strncmp(value, "$HOME/", 6) == 0)
+        {
+            if (!safe_snprintf(expanded, sizeof(expanded), "%s%s", home, value + 5))
+                break;
+            value = expanded;
+        }
+        else if (strcmp(value, "${HOME}") == 0)
+        {
+            if (!safe_snprintf(expanded, sizeof(expanded), "%s", home))
+                break;
+            value = expanded;
+        }
+        else if (strncmp(value, "${HOME}/", 8) == 0)
+        {
+            if (!safe_snprintf(expanded, sizeof(expanded), "%s%s", home, value + 7))
+                break;
+            value = expanded;
+        }
+        else if (value[0] != '/')
+        {
+            if (!safe_snprintf(expanded, sizeof(expanded), "%s/%s", home, value))
+                break;
+            value = expanded;
+        }
+
+        if (strcmp(value, home) == 0)
+            break;
+
+        if (!safe_snprintf(dst, size, "%s", value))
+            break;
+
+        fclose(f);
+        return 1;
+    }
+
+    fclose(f);
+    return 0;
+}
+
+static void build_wallpaper_dir(char *dst, size_t size)
+{
+    const char *home = getenv("HOME");
+    char videos_dir[PATH_BUF];
+
+    if (read_xdg_videos_dir(videos_dir, sizeof(videos_dir)))
+    {
+        if (!safe_snprintf(dst, size, "%s/Livepaper", videos_dir))
+        {
+            fprintf(stderr, "Path is too long.\n");
+            exit(1);
+        }
+        return;
+    }
+
+    if (!safe_snprintf(dst, size, "%s/Videos/Livepaper", home))
+    {
+        fprintf(stderr, "Path is too long.\n");
+        exit(1);
+    }
+}
+
 static void ensure_dirs(void)
 {
     const char *home = getenv("HOME");
@@ -113,8 +210,8 @@ static void ensure_dirs(void)
     if (safe_snprintf(autostart_dir, sizeof(autostart_dir), "%s/.config/autostart", home))
         mkdir_p(autostart_dir);
 
-    if (safe_snprintf(wallpaper_dir, sizeof(wallpaper_dir), "%s/Wideo/Livepaper", home))
-        mkdir_p(wallpaper_dir);
+    build_wallpaper_dir(wallpaper_dir, sizeof(wallpaper_dir));
+    mkdir_p(wallpaper_dir);
 }
 
 int process_running(pid_t pid)
@@ -1172,7 +1269,7 @@ static void print_help(void)
         "  livepaper status\n"
         "  livepaper monitors\n\n"
         "Examples:\n"
-        "  livepaper apply ~/Wideo/Livepaper/wallpaper.mp4 all\n"
+        "  livepaper apply ~/Videos/Livepaper/wallpaper.mp4 all\n"
         "  livepaper start\n"
         "  livepaper stop\n"
     );

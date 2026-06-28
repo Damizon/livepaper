@@ -8,7 +8,6 @@
 
 #define CONFIG_DIR ".config/livepaper"
 #define CONFIG_FILE ".config/livepaper/config.ini"
-#define WALLPAPER_DIR "Wideo/Livepaper"
 #define THUMB_DIR ".cache/livepaper/thumbnails"
 
 GtkWidget *wallpaper_grid;
@@ -23,6 +22,20 @@ static char *make_home_path(const char *relative)
     const char *home = getenv("HOME");
 
     snprintf(path, sizeof(path), "%s/%s", home, relative);
+    return path;
+}
+
+static const char *get_wallpaper_dir(void)
+{
+    static char path[PATH_MAX];
+    const char *videos_dir = g_get_user_special_dir(G_USER_DIRECTORY_VIDEOS);
+    const char *home = getenv("HOME");
+
+    if (videos_dir && *videos_dir && g_strcmp0(videos_dir, home) != 0)
+        snprintf(path, sizeof(path), "%s/Livepaper", videos_dir);
+    else
+        snprintf(path, sizeof(path), "%s/Videos/Livepaper", home);
+
     return path;
 }
 
@@ -249,11 +262,13 @@ static void refresh_wallpapers(void)
 {
     clear_grid();
 
-    g_mkdir_with_parents(make_home_path(WALLPAPER_DIR), 0755);
+    const char *wallpaper_dir = get_wallpaper_dir();
+
+    g_mkdir_with_parents(wallpaper_dir, 0755);
     g_mkdir_with_parents(make_home_path(THUMB_DIR), 0755);
 
     char folder[PATH_MAX];
-    snprintf(folder, sizeof(folder), "%s", make_home_path(WALLPAPER_DIR));
+    snprintf(folder, sizeof(folder), "%s", wallpaper_dir);
 
     DIR *dir = opendir(folder);
 
@@ -292,7 +307,7 @@ static void refresh_wallpapers(void)
     closedir(dir);
 
     if (index == 0)
-        set_status("No videos found in ~/Wideo/Livepaper.");
+        set_status("No videos found in the Livepaper video folder.");
     else
         set_status("Wallpapers loaded.");
 }
@@ -407,6 +422,7 @@ static void app_activate(GtkApplication *app, gpointer user_data)
     GtkWidget *window = gtk_application_window_new(app);
 
     gtk_window_set_title(GTK_WINDOW(window), "Livepaper");
+    gtk_window_set_icon_name(GTK_WINDOW(window), "livepaper");
     gtk_window_set_default_size(GTK_WINDOW(window), 760, 620);
 
     GtkWidget *main_box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
@@ -421,7 +437,7 @@ static void app_activate(GtkApplication *app, gpointer user_data)
     gtk_box_append(GTK_BOX(main_box), title);
 
     GtkWidget *folder_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-    GtkWidget *folder_label = gtk_label_new(make_home_path(WALLPAPER_DIR));
+    GtkWidget *folder_label = gtk_label_new(get_wallpaper_dir());
     GtkWidget *refresh_button = gtk_button_new_with_label("Refresh");
 
     gtk_widget_add_css_class(folder_box, "path-bar");
@@ -500,6 +516,9 @@ static void app_activate(GtkApplication *app, gpointer user_data)
 
 int main(int argc, char **argv)
 {
+    g_set_prgname("livepaper");
+    g_set_application_name("Livepaper");
+
     GtkApplication *app = gtk_application_new(
         "org.livepaper.gui",
         G_APPLICATION_DEFAULT_FLAGS
