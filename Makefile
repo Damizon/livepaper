@@ -7,6 +7,7 @@ SRC = \
 	src/main.c \
 	src/core/config.c \
 	src/core/paths.c \
+	src/session/lock.c \
 	src/session/pidfile.c \
 	src/utils/string_utils.c
 GUI_SRC = livepaper-gui.c

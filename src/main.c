@@ -11,18 +11,17 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <fcntl.h>
 #include <errno.h>
 #include "../include/config.h"
 #include "../include/process.h"
 #include "core/config.h"
 #include "core/paths.h"
+#include "session/lock.h"
 #include "session/pidfile.h"
 
 static Display *g_display = NULL;
 static Window g_window = 0;
 static pid_t g_mpv_pid = -1;
-static int g_lock_fd = -1;
 
 typedef struct DesktopWindowSelection
 {
@@ -58,46 +57,6 @@ static int desktop_processes_ready(void)
     int cinnamon = command_success("pgrep -x cinnamon >/dev/null 2>&1");
 
     return nemo && cinnamon;
-}
-
-static int acquire_lock(void)
-{
-    LivepaperPaths *paths = livepaper_paths();
-    g_lock_fd = open(paths->lock_file, O_CREAT | O_RDWR, 0644);
-
-    if (g_lock_fd < 0)
-    {
-        perror("Cannot open lock file");
-        return 0;
-    }
-
-    struct flock fl;
-    memset(&fl, 0, sizeof(fl));
-    fl.l_type = F_WRLCK;
-    fl.l_whence = SEEK_SET;
-
-    if (fcntl(g_lock_fd, F_SETLK, &fl) < 0)
-    {
-        if (errno == EACCES || errno == EAGAIN)
-            fprintf(stderr, "Another Livepaper instance is already running.\n");
-        else
-            perror("Cannot acquire lock");
-
-        close(g_lock_fd);
-        g_lock_fd = -1;
-        return 0;
-    }
-
-    return 1;
-}
-
-static void release_lock(void)
-{
-    if (g_lock_fd >= 0)
-    {
-        close(g_lock_fd);
-        g_lock_fd = -1;
-    }
 }
 
 static void remove_runtime_files(void)
