@@ -5,6 +5,7 @@ VERSION ?= 0.6.0
 
 SRC = \
 	src/main.c \
+	src/backend/x11_backend.c \
 	src/backend/x11_desktop.c \
 	src/core/config.c \
 	src/core/paths.c \
