@@ -23,56 +23,12 @@
 #include "session/pidfile.h"
 #include "session/runtime.h"
 
-static Display *g_display = NULL;
-static Window g_window = 0;
-static pid_t g_mpv_pid = -1;
-
 int process_running(pid_t pid)
 {
     if (pid <= 0)
         return 0;
 
     return kill(pid, 0) == 0 || errno == EPERM;
-}
-
-
-static void cleanup(int sig)
-{
-    (void)sig;
-
-    printf("\nStopping Livepaper...\n");
-
-    if (g_mpv_pid > 0)
-    {
-        kill(g_mpv_pid, SIGTERM);
-
-        for (int i = 0; i < 20; i++)
-        {
-            if (waitpid(g_mpv_pid, NULL, WNOHANG) > 0)
-                break;
-
-            usleep(100000);
-        }
-
-        if (process_running(g_mpv_pid))
-            kill(g_mpv_pid, SIGKILL);
-    }
-
-    if (g_display && g_window)
-    {
-        XDestroyWindow(g_display, g_window);
-        XFlush(g_display);
-        g_window = 0;
-    }
-
-    if (g_display)
-    {
-        XCloseDisplay(g_display);
-        g_display = NULL;
-    }
-
-    remove_runtime_files();
-    exit(0);
 }
 
 static int run_wallpaper(const LivepaperConfig *cfg)
@@ -157,22 +113,21 @@ static int run_wallpaper(const LivepaperConfig *cfg)
     XLowerWindow(d, win);
     XSync(d, False);
 
-    g_display = d;
-    g_window = win;
+    x11_backend_set_window(d, win);
 
     signal(SIGINT, cleanup);
     signal(SIGTERM, cleanup);
     signal(SIGHUP, cleanup);
 
-    g_mpv_pid = fork();
+    x11_backend_set_mpv_pid(fork());
 
-    if (g_mpv_pid < 0)
+    if (x11_backend_get_mpv_pid() < 0)
     {
         perror("fork mpv");
         cleanup(0);
     }
 
-    if (g_mpv_pid == 0)
+    if (x11_backend_get_mpv_pid() == 0)
     {
         char wid_arg[128];
         snprintf(wid_arg, sizeof(wid_arg), "--wid=0x%lx", win);
@@ -211,7 +166,7 @@ static int run_wallpaper(const LivepaperConfig *cfg)
     printf("Created Livepaper child window ID: 0x%lx\n", win);
     printf("X Shape input pass-through enabled: %s\n", input_passthrough ? "yes" : "no");
     printf("Livepaper PID: %d\n", getpid());
-    printf("MPV PID: %d\n", g_mpv_pid);
+    printf("MPV PID: %d\n", x11_backend_get_mpv_pid());
 
     refresh_muffin_stacking_once(d, win);
 
@@ -221,7 +176,7 @@ static int run_wallpaper(const LivepaperConfig *cfg)
 
         keep_layer_order(d, win);
 
-        if (waitpid(g_mpv_pid, NULL, WNOHANG) > 0)
+        if (waitpid(x11_backend_get_mpv_pid(), NULL, WNOHANG) > 0)
         {
             printf("MPV exited.\n");
             cleanup(0);
