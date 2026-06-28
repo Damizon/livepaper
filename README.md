@@ -1,20 +1,21 @@
 # Livepaper
 
-Livepaper is a small video wallpaper manager for Linux Mint Cinnamon/Nemo desktops.
-It places a looping video behind the desktop icons and provides both a GTK interface
-and a command-line tool.
+Livepaper 1.0.0 is a stable video wallpaper manager for Linux Mint Cinnamon on
+X11/Nemo desktops. It places a looping video behind the desktop icons and
+provides both a GTK4 interface and a command-line tool.
 
 ## Features
 
-- GTK wallpaper picker for videos stored in your Videos folder under `Livepaper`
+- GTK4 wallpaper picker for videos stored in your Videos folder under `Livepaper`
 - CLI for applying, starting, stopping, and checking the wallpaper service
 - Multi-monitor discovery through XRandR
 - Autostart entry creation after starting a wallpaper
 - Debian package for Linux Mint and other Debian/Ubuntu-based systems
+- Stable Cinnamon X11 backend with desktop icon compatibility improvements
 
 ## Requirements
 
-Livepaper is designed for:
+Livepaper 1.0.0 is designed for:
 
 - Linux Mint Cinnamon
 - X11 session
@@ -34,8 +35,8 @@ Runtime dependencies are handled by the `.deb` package:
 Download the `.deb` package from GitHub Releases and install it:
 
 ```bash
-curl -LO https://github.com/Damizon/livepaper/releases/download/v0.6.0/livepaper_0.6.0_amd64.deb
-sudo apt install ./livepaper_0.6.0_amd64.deb
+curl -LO https://github.com/Damizon/livepaper/releases/download/v1.0.0/livepaper_1.0.0_amd64.deb
+sudo apt install ./livepaper_1.0.0_amd64.deb
 ```
 
 Or clone the repository, build the package, and install the generated `.deb`:
@@ -44,7 +45,7 @@ Or clone the repository, build the package, and install the generated `.deb`:
 git clone https://github.com/Damizon/livepaper.git
 cd livepaper
 make deb
-sudo apt install ./build/packages/livepaper_0.6.0_amd64.deb
+sudo apt install ./build/packages/livepaper_1.0.0_amd64.deb
 ```
 
 After installation, launch **Livepaper** from the application menu.
@@ -142,6 +143,18 @@ build/packages/
 ```
 
 ## Release Notes
+
+### 1.0.0
+
+- Stable release for Linux Mint Cinnamon on X11/Nemo desktops.
+- Major backend refactor into core, session, backend, and utility modules.
+- GTK4 GUI for selecting and applying video wallpapers.
+- Improved compatibility with desktop icons and Cinnamon/Nemo window stacking.
+- Preserved the screen sleep fix from 0.6.0.
+- Uses the system XDG Videos directory for language-independent wallpaper folder
+  discovery.
+- Includes application icons and Debian package installation support.
+- Project architecture prepared for future backend development.
 
 ### 0.6.0
 
