@@ -5,6 +5,7 @@ VERSION ?= 0.6.0
 
 SRC = \
 	src/main.c \
+	src/core/config.c \
 	src/core/paths.c \
 	src/utils/string_utils.c
 GUI_SRC = livepaper-gui.c
