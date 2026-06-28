@@ -1,25 +1,16 @@
-#include <X11/Xlib.h>
-#include <X11/Xatom.h>
-#include <X11/Xutil.h>
-#include <X11/extensions/Xrandr.h>
-#include <X11/extensions/shape.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <signal.h>
 #include <sys/types.h>
-#include <sys/wait.h>
 #include <errno.h>
 #include "../include/config.h"
 #include "../include/process.h"
 #include "backend/x11_backend.h"
-#include "backend/x11_desktop.h"
 #include "core/config.h"
 #include "core/paths.h"
 #include "session/autostart.h"
-#include "session/lock.h"
 #include "session/pidfile.h"
 #include "session/runtime.h"
 
