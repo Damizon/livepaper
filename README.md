@@ -1,6 +1,6 @@
 # Livepaper
 
-Livepaper 1.0.0 is a stable video wallpaper manager for Linux Mint Cinnamon on
+Livepaper 1.1.0 is a stable video wallpaper manager for Linux Mint Cinnamon on
 X11/Nemo desktops. It places a looping video behind the desktop icons and
 provides both a GTK4 interface and a command-line tool.
 
@@ -15,7 +15,7 @@ provides both a GTK4 interface and a command-line tool.
 
 ## Requirements
 
-Livepaper 1.0.0 is designed for:
+Livepaper 1.1.0 is designed for:
 
 - Linux Mint Cinnamon
 - X11 session
@@ -35,8 +35,8 @@ Runtime dependencies are handled by the `.deb` package:
 Download the `.deb` package from GitHub Releases and install it:
 
 ```bash
-curl -LO https://github.com/Damizon/livepaper/releases/download/v1.0.0/livepaper_1.0.0_amd64.deb
-sudo apt install ./livepaper_1.0.0_amd64.deb
+curl -LO https://github.com/Damizon/livepaper/releases/download/v1.1.0/livepaper_1.1.0_amd64.deb
+sudo apt install ./livepaper_1.1.0_amd64.deb
 ```
 
 Or clone the repository, build the package, and install the generated `.deb`:
@@ -45,7 +45,7 @@ Or clone the repository, build the package, and install the generated `.deb`:
 git clone https://github.com/Damizon/livepaper.git
 cd livepaper
 make deb
-sudo apt install ./build/packages/livepaper_1.0.0_amd64.deb
+sudo apt install ./build/packages/livepaper_1.1.0_amd64.deb
 ```
 
 After installation, launch **Livepaper** from the application menu.
@@ -75,8 +75,8 @@ Supported extensions in the GUI:
 1. Copy video files into the `Livepaper` folder inside your Videos folder.
 2. Open **Livepaper**.
 3. Select a video.
-4. Choose a monitor or leave `all`.
-5. Click **Apply and Start**.
+4. Choose `all`, `stretched`, or a specific monitor.
+5. Click **Apply**.
 
 ## CLI Usage
 
@@ -96,6 +96,12 @@ Stop Livepaper:
 
 ```bash
 livepaper stop
+```
+
+Stop Livepaper on one monitor:
+
+```bash
+livepaper stop HDMI-0
 ```
 
 Check status:
@@ -143,6 +149,16 @@ build/packages/
 ```
 
 ## Release Notes
+
+### 1.1.0
+
+- Added reliable multi-monitor wallpaper placement for XRandR layouts.
+- Changed `all` to run the same wallpaper independently on every monitor.
+- Added `stretched` mode for one wallpaper across the full desktop area.
+- Added per-monitor wallpaper config so different monitors can run different
+  videos.
+- Added per-monitor stop support from both CLI and GUI.
+- Kept the single-daemon autostart, PID, and lock model unchanged.
 
 ### 1.0.0
 
