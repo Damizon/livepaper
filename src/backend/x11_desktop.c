@@ -2,6 +2,7 @@
 
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
+#include <X11/extensions/Xrandr.h>
 #include <X11/extensions/shape.h>
 
 #include <stdio.h>
@@ -66,6 +67,52 @@ static int is_nemo_desktop(Display *d, Window win)
     return 0;
 }
 
+static int size_matches_desktop_area(Display *d, int width, int height)
+{
+    int screen = DefaultScreen(d);
+    int screen_w = DisplayWidth(d, screen);
+    int screen_h = DisplayHeight(d, screen);
+    Window root = RootWindow(d, screen);
+    XRRScreenResources *res;
+
+    if (width >= screen_w * 0.7 && height >= screen_h * 0.7)
+        return 1;
+
+    res = XRRGetScreenResourcesCurrent(d, root);
+    if (!res)
+        return 0;
+
+    for (int i = 0; i < res->noutput; i++)
+    {
+        XRROutputInfo *output = XRRGetOutputInfo(d, res, res->outputs[i]);
+        int match = 0;
+
+        if (output && output->connection == RR_Connected && output->crtc)
+        {
+            XRRCrtcInfo *crtc = XRRGetCrtcInfo(d, res, output->crtc);
+
+            if (crtc)
+            {
+                match = width >= (int)(crtc->width * 0.7) &&
+                        height >= (int)(crtc->height * 0.7);
+                XRRFreeCrtcInfo(crtc);
+            }
+        }
+
+        if (output)
+            XRRFreeOutputInfo(output);
+
+        if (match)
+        {
+            XRRFreeScreenResources(res);
+            return 1;
+        }
+    }
+
+    XRRFreeScreenResources(res);
+    return 0;
+}
+
 static Window find_nemo_desktop(Display *d, Window root)
 {
     if (is_nemo_desktop(d, root))
@@ -74,14 +121,8 @@ static Window find_nemo_desktop(Display *d, Window root)
 
         if (XGetWindowAttributes(d, root, &attr))
         {
-            int screen_w = DisplayWidth(d, DefaultScreen(d));
-            int screen_h = DisplayHeight(d, DefaultScreen(d));
-
-            if (attr.width >= screen_w * 0.7 &&
-                attr.height >= screen_h * 0.7)
-            {
+            if (size_matches_desktop_area(d, attr.width, attr.height))
                 return root;
-            }
         }
     }
 
@@ -273,12 +314,8 @@ int wait_for_desktop_ready(Display *d, int timeout_seconds)
 
             if (XGetWindowAttributes(d, nemo, &attr))
             {
-                int screen_w = DisplayWidth(d, DefaultScreen(d));
-                int screen_h = DisplayHeight(d, DefaultScreen(d));
-
                 if (attr.map_state == IsViewable &&
-                    attr.width >= screen_w * 0.7 &&
-                    attr.height >= screen_h * 0.7)
+                    size_matches_desktop_area(d, attr.width, attr.height))
                 {
                     window_ok = 1;
                 }

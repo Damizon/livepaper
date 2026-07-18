@@ -22,6 +22,95 @@ static Display *g_display = NULL;
 static Window g_window = 0;
 static pid_t g_mpv_pid = -1;
 
+typedef struct MonitorGeometry
+{
+    int x;
+    int y;
+    int width;
+    int height;
+} MonitorGeometry;
+
+static int monitor_matches(const char *requested, const char *name)
+{
+    size_t len;
+
+    if (!requested || strcmp(requested, "all") == 0)
+        return 0;
+
+    len = strlen(name);
+
+    return strcmp(requested, name) == 0 ||
+           (strncmp(requested, name, len) == 0 &&
+            (requested[len] == ' ' || requested[len] == '\0'));
+}
+
+static MonitorGeometry get_root_geometry(Display *d, int screen)
+{
+    MonitorGeometry geometry;
+    Window root = RootWindow(d, screen);
+    XWindowAttributes attrs;
+
+    geometry.x = 0;
+    geometry.y = 0;
+    geometry.width = DisplayWidth(d, screen);
+    geometry.height = DisplayHeight(d, screen);
+
+    if (XGetWindowAttributes(d, root, &attrs))
+    {
+        geometry.width = attrs.width;
+        geometry.height = attrs.height;
+    }
+
+    return geometry;
+}
+
+static int get_monitor_geometry(Display *d, const char *requested, MonitorGeometry *geometry)
+{
+    int screen = DefaultScreen(d);
+    Window root = RootWindow(d, screen);
+    XRRScreenResources *res;
+    int found = 0;
+
+    *geometry = get_root_geometry(d, screen);
+
+    if (!requested || strcmp(requested, "all") == 0 || requested[0] == '\0')
+        return 1;
+
+    res = XRRGetScreenResourcesCurrent(d, root);
+    if (!res)
+        return 0;
+
+    for (int i = 0; i < res->noutput; i++)
+    {
+        XRROutputInfo *output = XRRGetOutputInfo(d, res, res->outputs[i]);
+
+        if (output && output->connection == RR_Connected && output->crtc &&
+            monitor_matches(requested, output->name))
+        {
+            XRRCrtcInfo *crtc = XRRGetCrtcInfo(d, res, output->crtc);
+
+            if (crtc)
+            {
+                geometry->x = crtc->x;
+                geometry->y = crtc->y;
+                geometry->width = crtc->width;
+                geometry->height = crtc->height;
+                found = 1;
+                XRRFreeCrtcInfo(crtc);
+            }
+        }
+
+        if (output)
+            XRRFreeOutputInfo(output);
+
+        if (found)
+            break;
+    }
+
+    XRRFreeScreenResources(res);
+    return found;
+}
+
 void cleanup(int sig)
 {
     (void)sig;
@@ -86,19 +175,36 @@ int run_wallpaper(const LivepaperConfig *cfg)
     }
 
     int screen = DefaultScreen(d);
-    int width = DisplayWidth(d, screen);
-    int height = DisplayHeight(d, screen);
+    MonitorGeometry geometry;
     DesktopWindowSelection desktop = xwinwrap_find_desktop_window(d);
     Window create_parent = RootWindow(d, screen);
     int depth = CopyFromParent;
     int flags = CWBackPixel | CWEventMask;
     Visual *visual = CopyFromParent;
 
+    if (!get_monitor_geometry(d, cfg->monitor, &geometry))
+    {
+        fprintf(
+            stderr,
+            "Monitor '%s' was not found. Falling back to all monitors.\n",
+            cfg->monitor
+        );
+        geometry = get_root_geometry(d, screen);
+    }
+
     printf("Selected desktop parent window ID: 0x%lx\n", desktop.desktop);
     printf("Livepaper create parent window ID: 0x%lx\n", create_parent);
     printf("xwinwrap root window ID: 0x%lx\n", desktop.root);
     printf("__SWM_VROOT found: %s\n", desktop.swm_vroot_found ? "yes" : "no");
     printf("Nemo desktop found: %s\n", desktop.nemo_found ? "yes" : "no");
+    printf(
+        "Livepaper geometry for monitor '%s': %dx%d+%d+%d\n",
+        cfg->monitor,
+        geometry.width,
+        geometry.height,
+        geometry.x,
+        geometry.y
+    );
 
     XWindowAttributes desktop_attrs;
     if (XGetWindowAttributes(d, desktop.desktop, &desktop_attrs))
@@ -121,10 +227,10 @@ int run_wallpaper(const LivepaperConfig *cfg)
     Window win = XCreateWindow(
         d,
         create_parent,
-        0,
-        0,
-        width,
-        height,
+        geometry.x,
+        geometry.y,
+        geometry.width,
+        geometry.height,
         0,
         depth,
         InputOutput,
