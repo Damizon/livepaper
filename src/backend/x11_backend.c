@@ -276,7 +276,7 @@ static pid_t start_mpv(Window win, const char *wallpaper, const char *fit, const
     {
         char wid_arg[128];
         char aspect_arg[128];
-        const char *fit_mode = fit ? fit : "normal";
+        const char *fit_mode = fit ? fit : "none";
         const char *args[40];
         int argc = 0;
 

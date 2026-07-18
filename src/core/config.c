@@ -29,7 +29,7 @@ static void init_config(LivepaperConfig *cfg)
     cfg->wallpaper[0] = '\0';
     strcpy(cfg->monitor, "all");
     strcpy(cfg->mode, "all");
-    strcpy(cfg->fit, "normal");
+    strcpy(cfg->fit, "none");
     cfg->monitor_count = 0;
     cfg->delay = 0;
 }
@@ -53,16 +53,20 @@ static void clamp_delay(LivepaperConfig *cfg)
 static const char *normalize_fit(const char *fit)
 {
     if (!fit || fit[0] == '\0')
-        return "normal";
+        return "none";
 
-    if (strcmp(fit, "normal") == 0 ||
+    if (strcmp(fit, "none") == 0 ||
+        strcmp(fit, "normal") == 0 ||
         strcmp(fit, "cover") == 0 ||
         strcmp(fit, "stretch") == 0)
     {
+        if (strcmp(fit, "normal") == 0)
+            return "none";
+
         return fit;
     }
 
-    return "normal";
+    return "none";
 }
 
 static void set_monitor_wallpaper(LivepaperConfig *cfg, const char *monitor, const char *wallpaper)

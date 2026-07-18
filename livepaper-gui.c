@@ -14,6 +14,7 @@ GtkWidget *wallpaper_grid;
 GtkWidget *monitor_combo;
 GtkWidget *fit_combo;
 GtkWidget *status_label;
+GtkWidget *selected_wallpaper_button = NULL;
 
 char selected_wallpaper[PATH_MAX] = "";
 
@@ -88,6 +89,10 @@ static void load_css(void)
         "}"
         ".button-stop:hover {"
         "  background: #f87171;"
+        "}"
+        ".wallpaper-selected {"
+        "  border: 3px solid #22c55e;"
+        "  box-shadow: 0 0 0 2px alpha(#22c55e, 0.35);"
         "}";
 
     gtk_css_provider_load_from_string(provider, css);
@@ -194,6 +199,7 @@ static void create_thumbnail(const char *video_path, char *thumb_path, size_t si
 static void clear_grid(void)
 {
     GtkWidget *child = gtk_widget_get_first_child(wallpaper_grid);
+    selected_wallpaper_button = NULL;
 
     while (child)
     {
@@ -214,6 +220,12 @@ static void on_wallpaper_clicked(GtkButton *button, gpointer data)
 
     strncpy(selected_wallpaper, path, sizeof(selected_wallpaper) - 1);
     selected_wallpaper[sizeof(selected_wallpaper) - 1] = '\0';
+
+    if (selected_wallpaper_button)
+        gtk_widget_remove_css_class(selected_wallpaper_button, "wallpaper-selected");
+
+    selected_wallpaper_button = GTK_WIDGET(button);
+    gtk_widget_add_css_class(selected_wallpaper_button, "wallpaper-selected");
 
     set_status(selected_wallpaper);
 }
@@ -374,7 +386,7 @@ static void on_apply_clicked(GtkButton *button, gpointer data)
     char *fit = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(fit_combo));
 
     if (!fit)
-        fit = g_strdup("normal");
+        fit = g_strdup("none");
 
     char *quoted_fit = g_shell_quote(fit);
     char *cmd = g_strdup_printf(
@@ -496,7 +508,7 @@ static void app_activate(GtkApplication *app, gpointer user_data)
     gtk_widget_set_halign(fit_label, GTK_ALIGN_START);
 
     fit_combo = gtk_combo_box_text_new();
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(fit_combo), "normal");
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(fit_combo), "none");
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(fit_combo), "cover");
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(fit_combo), "stretch");
     gtk_combo_box_set_active(GTK_COMBO_BOX(fit_combo), 0);
