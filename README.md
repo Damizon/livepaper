@@ -1,6 +1,6 @@
 # Livepaper
 
-Livepaper 1.1.0 is a stable video wallpaper manager for Linux Mint Cinnamon on
+Livepaper 1.2.0 is a stable video wallpaper manager for Linux Mint Cinnamon on
 X11/Nemo desktops. It places a looping video behind the desktop icons and
 provides both a GTK4 interface and a command-line tool.
 
@@ -15,7 +15,7 @@ provides both a GTK4 interface and a command-line tool.
 
 ## Requirements
 
-Livepaper 1.1.0 is designed for:
+Livepaper 1.2.0 is designed for:
 
 - Linux Mint Cinnamon
 - X11 session
@@ -35,8 +35,8 @@ Runtime dependencies are handled by the `.deb` package:
 Download the `.deb` package from GitHub Releases and install it:
 
 ```bash
-curl -LO https://github.com/Damizon/livepaper/releases/download/v1.1.0/livepaper_1.1.0_amd64.deb
-sudo apt install ./livepaper_1.1.0_amd64.deb
+curl -LO https://github.com/Damizon/livepaper/releases/download/v1.2.0/livepaper_1.2.0_amd64.deb
+sudo apt install ./livepaper_1.2.0_amd64.deb
 ```
 
 Or clone the repository, build the package, and install the generated `.deb`:
@@ -45,7 +45,7 @@ Or clone the repository, build the package, and install the generated `.deb`:
 git clone https://github.com/Damizon/livepaper.git
 cd livepaper
 make deb
-sudo apt install ./build/packages/livepaper_1.1.0_amd64.deb
+sudo apt install ./build/packages/livepaper_1.2.0_amd64.deb
 ```
 
 After installation, launch **Livepaper** from the application menu.
@@ -149,6 +149,15 @@ build/packages/
 ```
 
 ## Release Notes
+
+### 1.2.0
+
+- Added wallpaper fit modes: `none`, `cover`, and `stretch`.
+- Added cover mode to fill monitors without changing video proportions.
+- Added stretch mode to fill monitor or stretched desktop ratios directly.
+- Added a Fit selector to the GTK interface.
+- Added visual selection highlighting for the currently selected wallpaper.
+- Improved selected wallpaper highlighting so it does not shift the grid layout.
 
 ### 1.1.0
 
