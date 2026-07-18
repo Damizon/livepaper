@@ -91,8 +91,8 @@ static void load_css(void)
         "  background: #f87171;"
         "}"
         ".wallpaper-selected {"
-        "  border: 3px solid #22c55e;"
-        "  box-shadow: 0 0 0 2px alpha(#22c55e, 0.35);"
+        "  background: alpha(#facc15, 0.18);"
+        "  box-shadow: inset 0 0 0 2px #facc15;"
         "}";
 
     gtk_css_provider_load_from_string(provider, css);
