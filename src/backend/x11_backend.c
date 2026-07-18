@@ -38,8 +38,32 @@ typedef struct WallpaperInstance
     MonitorGeometry geometry;
 } WallpaperInstance;
 
+typedef struct WallpaperTarget
+{
+    MonitorGeometry geometry;
+    char wallpaper[PATH_BUF];
+} WallpaperTarget;
+
 static WallpaperInstance g_instances[MAX_WALLPAPER_INSTANCES];
 static int g_instance_count = 0;
+
+static void copy_string(char *dst, size_t size, const char *src)
+{
+    size_t len;
+
+    if (size == 0)
+        return;
+
+    if (!src)
+        src = "";
+
+    len = strlen(src);
+    if (len >= size)
+        len = size - 1;
+
+    memcpy(dst, src, len);
+    dst[len] = '\0';
+}
 
 static int monitor_matches(const char *requested, const char *name)
 {
@@ -342,14 +366,39 @@ int run_wallpaper(const LivepaperConfig *cfg)
     }
 
     int screen = DefaultScreen(d);
-    MonitorGeometry geometries[MAX_WALLPAPER_INSTANCES];
-    int geometry_count = 0;
+    WallpaperTarget targets[MAX_WALLPAPER_INSTANCES];
+    int target_count = 0;
     DesktopWindowSelection desktop = xwinwrap_find_desktop_window(d);
     Window create_parent = RootWindow(d, screen);
 
-    if (strcmp(cfg->monitor, "all") == 0)
+    if (strcmp(cfg->mode, "per-monitor") == 0)
     {
-        geometry_count = get_all_monitor_geometries(
+        for (int i = 0; i < cfg->monitor_count && target_count < MAX_WALLPAPER_INSTANCES; i++)
+        {
+            if (!get_monitor_geometry(d, cfg->monitors[i].monitor, &targets[target_count].geometry))
+            {
+                fprintf(
+                    stderr,
+                    "Monitor '%s' was not found. Skipping configured wallpaper.\n",
+                    cfg->monitors[i].monitor
+                );
+                continue;
+            }
+
+            copy_string(targets[target_count].wallpaper, sizeof(targets[target_count].wallpaper), cfg->monitors[i].wallpaper);
+            target_count++;
+        }
+
+        if (target_count == 0)
+        {
+            fprintf(stderr, "No configured monitor wallpapers can be started.\n");
+            cleanup(0);
+        }
+    }
+    else if (strcmp(cfg->monitor, "all") == 0)
+    {
+        MonitorGeometry geometries[MAX_WALLPAPER_INSTANCES];
+        int geometry_count = get_all_monitor_geometries(
             d,
             geometries,
             MAX_WALLPAPER_INSTANCES
@@ -361,25 +410,35 @@ int run_wallpaper(const LivepaperConfig *cfg)
             geometries[0] = get_root_geometry(d, screen);
             geometry_count = 1;
         }
+
+        for (int i = 0; i < geometry_count; i++)
+        {
+            targets[target_count].geometry = geometries[i];
+            copy_string(targets[target_count].wallpaper, sizeof(targets[target_count].wallpaper), cfg->wallpaper);
+            target_count++;
+        }
     }
     else if (strcmp(cfg->monitor, "stretched") == 0)
     {
-        geometries[0] = get_root_geometry(d, screen);
-        geometry_count = 1;
+        targets[0].geometry = get_root_geometry(d, screen);
+        copy_string(targets[0].wallpaper, sizeof(targets[0].wallpaper), cfg->wallpaper);
+        target_count = 1;
     }
-    else if (!get_monitor_geometry(d, cfg->monitor, &geometries[0]))
+    else if (!get_monitor_geometry(d, cfg->monitor, &targets[0].geometry))
     {
         fprintf(
             stderr,
             "Monitor '%s' was not found. Falling back to all monitors.\n",
             cfg->monitor
         );
-        geometries[0] = get_root_geometry(d, screen);
-        geometry_count = 1;
+        targets[0].geometry = get_root_geometry(d, screen);
+        copy_string(targets[0].wallpaper, sizeof(targets[0].wallpaper), cfg->wallpaper);
+        target_count = 1;
     }
     else
     {
-        geometry_count = 1;
+        copy_string(targets[0].wallpaper, sizeof(targets[0].wallpaper), cfg->wallpaper);
+        target_count = 1;
     }
 
     printf("Selected desktop parent window ID: 0x%lx\n", desktop.desktop);
@@ -407,7 +466,7 @@ int run_wallpaper(const LivepaperConfig *cfg)
     signal(SIGTERM, cleanup);
     signal(SIGHUP, cleanup);
 
-    for (int i = 0; i < geometry_count; i++)
+    for (int i = 0; i < target_count; i++)
     {
         Window win;
         pid_t mpv_pid;
@@ -415,24 +474,24 @@ int run_wallpaper(const LivepaperConfig *cfg)
 
         printf(
             "Livepaper geometry for monitor '%s': %dx%d+%d+%d\n",
-            geometries[i].name,
-            geometries[i].width,
-            geometries[i].height,
-            geometries[i].x,
-            geometries[i].y
+            targets[i].geometry.name,
+            targets[i].geometry.width,
+            targets[i].geometry.height,
+            targets[i].geometry.x,
+            targets[i].geometry.y
         );
 
-        win = create_wallpaper_window(d, create_parent, screen, &geometries[i]);
+        win = create_wallpaper_window(d, create_parent, screen, &targets[i].geometry);
         input_passthrough = enable_input_passthrough(d, win);
         XSync(d, False);
 
-        mpv_pid = start_mpv(win, cfg->wallpaper);
+        mpv_pid = start_mpv(win, targets[i].wallpaper);
         if (mpv_pid < 0)
             cleanup(0);
 
         g_instances[g_instance_count].window = win;
         g_instances[g_instance_count].mpv_pid = mpv_pid;
-        g_instances[g_instance_count].geometry = geometries[i];
+        g_instances[g_instance_count].geometry = targets[i].geometry;
         g_instance_count++;
 
         printf("Created Livepaper child window ID: 0x%lx\n", win);

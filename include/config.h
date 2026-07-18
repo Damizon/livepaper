@@ -2,11 +2,21 @@
 #define CONFIG_H
 
 #define PATH_BUF 2048
+#define MAX_MONITOR_CONFIGS 16
+
+typedef struct
+{
+    char monitor[256];
+    char wallpaper[PATH_BUF];
+} LivepaperMonitorConfig;
 
 typedef struct
 {
     char wallpaper[PATH_BUF];
     char monitor[256];
+    char mode[32];
+    LivepaperMonitorConfig monitors[MAX_MONITOR_CONFIGS];
+    int monitor_count;
     int delay;
 } LivepaperConfig;
 

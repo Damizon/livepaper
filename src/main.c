@@ -48,7 +48,23 @@ static void start_livepaper(void)
         exit(1);
     }
 
-    if (access(cfg.wallpaper, R_OK) != 0)
+    if (strcmp(cfg.mode, "per-monitor") == 0)
+    {
+        for (int i = 0; i < cfg.monitor_count; i++)
+        {
+            if (access(cfg.monitors[i].wallpaper, R_OK) != 0)
+            {
+                fprintf(
+                    stderr,
+                    "Wallpaper file is not readable for monitor %s:\n%s\n",
+                    cfg.monitors[i].monitor,
+                    cfg.monitors[i].wallpaper
+                );
+                exit(1);
+            }
+        }
+    }
+    else if (access(cfg.wallpaper, R_OK) != 0)
     {
         fprintf(stderr, "Wallpaper file is not readable:\n%s\n", cfg.wallpaper);
         exit(1);
