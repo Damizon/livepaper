@@ -42,6 +42,7 @@ typedef struct WallpaperTarget
 {
     MonitorGeometry geometry;
     char wallpaper[PATH_BUF];
+    char fit[32];
 } WallpaperTarget;
 
 static WallpaperInstance g_instances[MAX_WALLPAPER_INSTANCES];
@@ -261,7 +262,7 @@ static Window create_wallpaper_window(
     return win;
 }
 
-static pid_t start_mpv(Window win, const char *wallpaper)
+static pid_t start_mpv(Window win, const char *wallpaper, const char *fit, const MonitorGeometry *geometry)
 {
     pid_t pid = fork();
 
@@ -274,33 +275,45 @@ static pid_t start_mpv(Window win, const char *wallpaper)
     if (pid == 0)
     {
         char wid_arg[128];
+        char aspect_arg[128];
+        const char *fit_mode = fit ? fit : "normal";
+        const char *args[40];
+        int argc = 0;
+
         snprintf(wid_arg, sizeof(wid_arg), "--wid=0x%lx", win);
-
-        execlp(
-            "mpv",
-            "mpv",
-            wid_arg,
-
-            "--loop-file",
-            "--no-audio",
-            "--no-border",
-            "--no-resume-playback",
-            "--stop-screensaver=no",
-
-            "--osc=no",
-            "--osd-level=0",
-            "--input-default-bindings=no",
-            "--input-vo-keyboard=no",
-            "--no-input-cursor",
-
-            "--hwdec=auto",
-            "--profile=fast",
-            "--vd-lavc-threads=2",
-
-            "--really-quiet",
-            wallpaper,
-            NULL
+        snprintf(
+            aspect_arg,
+            sizeof(aspect_arg),
+            "--video-aspect-override=%.12g",
+            geometry->height > 0 ? (double)geometry->width / (double)geometry->height : 1.0
         );
+
+        args[argc++] = "mpv";
+        args[argc++] = wid_arg;
+        args[argc++] = "--loop-file";
+        args[argc++] = "--no-audio";
+        args[argc++] = "--no-border";
+        args[argc++] = "--no-resume-playback";
+        args[argc++] = "--stop-screensaver=no";
+        args[argc++] = "--osc=no";
+        args[argc++] = "--osd-level=0";
+        args[argc++] = "--input-default-bindings=no";
+        args[argc++] = "--input-vo-keyboard=no";
+        args[argc++] = "--no-input-cursor";
+        args[argc++] = "--hwdec=auto";
+        args[argc++] = "--profile=fast";
+        args[argc++] = "--vd-lavc-threads=2";
+
+        if (strcmp(fit_mode, "cover") == 0)
+            args[argc++] = "--panscan=1";
+        else if (strcmp(fit_mode, "stretch") == 0)
+            args[argc++] = aspect_arg;
+
+        args[argc++] = "--really-quiet";
+        args[argc++] = wallpaper;
+        args[argc] = NULL;
+
+        execvp("mpv", (char * const *)args);
 
         perror("Failed to start mpv");
         _exit(1);
@@ -386,6 +399,7 @@ int run_wallpaper(const LivepaperConfig *cfg)
             }
 
             copy_string(targets[target_count].wallpaper, sizeof(targets[target_count].wallpaper), cfg->monitors[i].wallpaper);
+            copy_string(targets[target_count].fit, sizeof(targets[target_count].fit), cfg->fit);
             target_count++;
         }
 
@@ -415,6 +429,7 @@ int run_wallpaper(const LivepaperConfig *cfg)
         {
             targets[target_count].geometry = geometries[i];
             copy_string(targets[target_count].wallpaper, sizeof(targets[target_count].wallpaper), cfg->wallpaper);
+            copy_string(targets[target_count].fit, sizeof(targets[target_count].fit), cfg->fit);
             target_count++;
         }
     }
@@ -422,6 +437,7 @@ int run_wallpaper(const LivepaperConfig *cfg)
     {
         targets[0].geometry = get_root_geometry(d, screen);
         copy_string(targets[0].wallpaper, sizeof(targets[0].wallpaper), cfg->wallpaper);
+        copy_string(targets[0].fit, sizeof(targets[0].fit), cfg->fit);
         target_count = 1;
     }
     else if (!get_monitor_geometry(d, cfg->monitor, &targets[0].geometry))
@@ -433,11 +449,13 @@ int run_wallpaper(const LivepaperConfig *cfg)
         );
         targets[0].geometry = get_root_geometry(d, screen);
         copy_string(targets[0].wallpaper, sizeof(targets[0].wallpaper), cfg->wallpaper);
+        copy_string(targets[0].fit, sizeof(targets[0].fit), cfg->fit);
         target_count = 1;
     }
     else
     {
         copy_string(targets[0].wallpaper, sizeof(targets[0].wallpaper), cfg->wallpaper);
+        copy_string(targets[0].fit, sizeof(targets[0].fit), cfg->fit);
         target_count = 1;
     }
 
@@ -485,7 +503,7 @@ int run_wallpaper(const LivepaperConfig *cfg)
         input_passthrough = enable_input_passthrough(d, win);
         XSync(d, False);
 
-        mpv_pid = start_mpv(win, targets[i].wallpaper);
+        mpv_pid = start_mpv(win, targets[i].wallpaper, targets[i].fit, &targets[i].geometry);
         if (mpv_pid < 0)
             cleanup(0);
 

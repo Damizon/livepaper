@@ -29,6 +29,7 @@ static void init_config(LivepaperConfig *cfg)
     cfg->wallpaper[0] = '\0';
     strcpy(cfg->monitor, "all");
     strcpy(cfg->mode, "all");
+    strcpy(cfg->fit, "normal");
     cfg->monitor_count = 0;
     cfg->delay = 0;
 }
@@ -47,6 +48,21 @@ static void clamp_delay(LivepaperConfig *cfg)
         cfg->delay = 0;
     if (cfg->delay > 5)
         cfg->delay = 5;
+}
+
+static const char *normalize_fit(const char *fit)
+{
+    if (!fit || fit[0] == '\0')
+        return "normal";
+
+    if (strcmp(fit, "normal") == 0 ||
+        strcmp(fit, "cover") == 0 ||
+        strcmp(fit, "stretch") == 0)
+    {
+        return fit;
+    }
+
+    return "normal";
 }
 
 static void set_monitor_wallpaper(LivepaperConfig *cfg, const char *monitor, const char *wallpaper)
@@ -85,6 +101,7 @@ static void write_config_file(const LivepaperConfig *cfg)
     fprintf(f, "mode=%s\n", cfg->mode);
     fprintf(f, "wallpaper=%s\n", cfg->wallpaper);
     fprintf(f, "monitor=%s\n", cfg->monitor);
+    fprintf(f, "fit=%s\n", cfg->fit);
     fprintf(f, "delay=%d\n", cfg->delay);
 
     for (int i = 0; i < cfg->monitor_count; i++)
@@ -102,6 +119,11 @@ static void write_config_file(const LivepaperConfig *cfg)
 
 void save_config(const char *wallpaper, const char *monitor, int delay)
 {
+    save_config_with_fit(wallpaper, monitor, delay, NULL);
+}
+
+void save_config_with_fit(const char *wallpaper, const char *monitor, int delay, const char *fit)
+{
     LivepaperPaths *paths = livepaper_paths();
     LivepaperConfig cfg;
 
@@ -114,6 +136,7 @@ void save_config(const char *wallpaper, const char *monitor, int delay)
 
     cfg.delay = delay;
     clamp_delay(&cfg);
+    copy_string(cfg.fit, sizeof(cfg.fit), normalize_fit(fit ? fit : cfg.fit));
 
     if (is_global_monitor(monitor))
     {
@@ -209,6 +232,12 @@ int load_config(LivepaperConfig *cfg)
         {
             copy_string(cfg->monitor, sizeof(cfg->monitor), line + 8);
             cfg->monitor[strcspn(cfg->monitor, "\n")] = 0;
+        }
+        else if (strncmp(line, "fit=", 4) == 0)
+        {
+            copy_string(cfg->fit, sizeof(cfg->fit), line + 4);
+            cfg->fit[strcspn(cfg->fit, "\n")] = 0;
+            copy_string(cfg->fit, sizeof(cfg->fit), normalize_fit(cfg->fit));
         }
         else if (strncmp(line, "delay=", 6) == 0)
         {

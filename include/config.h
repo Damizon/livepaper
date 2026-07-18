@@ -15,6 +15,7 @@ typedef struct
     char wallpaper[PATH_BUF];
     char monitor[256];
     char mode[32];
+    char fit[32];
     LivepaperMonitorConfig monitors[MAX_MONITOR_CONFIGS];
     int monitor_count;
     int delay;

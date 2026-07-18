@@ -188,7 +188,7 @@ static void print_help(void)
     printf(
         "Livepaper\n\n"
         "Usage:\n"
-        "  livepaper apply <video_path> [monitor]\n"
+        "  livepaper apply <video_path> [monitor] [delay] [fit]\n"
         "  livepaper start\n"
         "  livepaper stop [monitor|all]\n"
         "  livepaper status\n"
@@ -221,6 +221,7 @@ int main(int argc, char **argv)
 
         const char *monitor = "all";
         int delay = -1;
+        const char *fit = NULL;
 
         if (argc >= 4)
             monitor = argv[3];
@@ -228,7 +229,10 @@ int main(int argc, char **argv)
         if (argc >= 5)
             delay = atoi(argv[4]);
 
-        save_config(argv[2], monitor, delay);
+        if (argc >= 6)
+            fit = argv[5];
+
+        save_config_with_fit(argv[2], monitor, delay, fit);
         return 0;
     }
 

@@ -12,6 +12,7 @@
 
 GtkWidget *wallpaper_grid;
 GtkWidget *monitor_combo;
+GtkWidget *fit_combo;
 GtkWidget *status_label;
 
 char selected_wallpaper[PATH_MAX] = "";
@@ -370,11 +371,18 @@ static void on_apply_clicked(GtkButton *button, gpointer data)
     char *livepaper_cmd = get_livepaper_command();
     char *quoted_wallpaper = g_shell_quote(selected_wallpaper);
     char *quoted_monitor = g_shell_quote(monitor);
+    char *fit = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(fit_combo));
+
+    if (!fit)
+        fit = g_strdup("normal");
+
+    char *quoted_fit = g_shell_quote(fit);
     char *cmd = g_strdup_printf(
-        "%s apply %s %s 0 && %s stop && %s start",
+        "%s apply %s %s 0 %s && %s stop && %s start",
         livepaper_cmd,
         quoted_wallpaper,
         quoted_monitor,
+        quoted_fit,
         livepaper_cmd,
         livepaper_cmd
     );
@@ -386,6 +394,8 @@ static void on_apply_clicked(GtkButton *button, gpointer data)
     g_free(livepaper_cmd);
     g_free(quoted_wallpaper);
     g_free(quoted_monitor);
+    g_free(quoted_fit);
+    g_free(fit);
     g_free(monitor);
 }
 
@@ -482,8 +492,19 @@ static void app_activate(GtkApplication *app, gpointer user_data)
 
     monitor_combo = gtk_combo_box_text_new();
 
+    GtkWidget *fit_label = gtk_label_new("Fit:");
+    gtk_widget_set_halign(fit_label, GTK_ALIGN_START);
+
+    fit_combo = gtk_combo_box_text_new();
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(fit_combo), "normal");
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(fit_combo), "cover");
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(fit_combo), "stretch");
+    gtk_combo_box_set_active(GTK_COMBO_BOX(fit_combo), 0);
+
     gtk_grid_attach(GTK_GRID(settings_grid), monitor_label, 0, 0, 1, 1);
     gtk_grid_attach(GTK_GRID(settings_grid), monitor_combo, 1, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(settings_grid), fit_label, 0, 1, 1, 1);
+    gtk_grid_attach(GTK_GRID(settings_grid), fit_combo, 1, 1, 1, 1);
 
     GtkWidget *button_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
 
