@@ -18,17 +18,28 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#define MAX_WALLPAPER_INSTANCES 16
+
 static Display *g_display = NULL;
-static Window g_window = 0;
-static pid_t g_mpv_pid = -1;
 
 typedef struct MonitorGeometry
 {
+    char name[128];
     int x;
     int y;
     int width;
     int height;
 } MonitorGeometry;
+
+typedef struct WallpaperInstance
+{
+    Window window;
+    pid_t mpv_pid;
+    MonitorGeometry geometry;
+} WallpaperInstance;
+
+static WallpaperInstance g_instances[MAX_WALLPAPER_INSTANCES];
+static int g_instance_count = 0;
 
 static int monitor_matches(const char *requested, const char *name)
 {
@@ -50,6 +61,7 @@ static MonitorGeometry get_root_geometry(Display *d, int screen)
     Window root = RootWindow(d, screen);
     XWindowAttributes attrs;
 
+    strcpy(geometry.name, "all");
     geometry.x = 0;
     geometry.y = 0;
     geometry.width = DisplayWidth(d, screen);
@@ -95,6 +107,7 @@ static int get_monitor_geometry(Display *d, const char *requested, MonitorGeomet
                 geometry->y = crtc->y;
                 geometry->width = crtc->width;
                 geometry->height = crtc->height;
+                snprintf(geometry->name, sizeof(geometry->name), "%s", output->name);
                 found = 1;
                 XRRFreeCrtcInfo(crtc);
             }
@@ -111,33 +124,176 @@ static int get_monitor_geometry(Display *d, const char *requested, MonitorGeomet
     return found;
 }
 
+static int get_all_monitor_geometries(Display *d, MonitorGeometry *geometries, int max_geometries)
+{
+    int screen = DefaultScreen(d);
+    Window root = RootWindow(d, screen);
+    XRRScreenResources *res;
+    int count = 0;
+
+    res = XRRGetScreenResourcesCurrent(d, root);
+    if (!res)
+        return 0;
+
+    for (int i = 0; i < res->noutput && count < max_geometries; i++)
+    {
+        XRROutputInfo *output = XRRGetOutputInfo(d, res, res->outputs[i]);
+
+        if (output && output->connection == RR_Connected && output->crtc)
+        {
+            XRRCrtcInfo *crtc = XRRGetCrtcInfo(d, res, output->crtc);
+
+            if (crtc)
+            {
+                snprintf(
+                    geometries[count].name,
+                    sizeof(geometries[count].name),
+                    "%s",
+                    output->name
+                );
+                geometries[count].x = crtc->x;
+                geometries[count].y = crtc->y;
+                geometries[count].width = crtc->width;
+                geometries[count].height = crtc->height;
+                count++;
+                XRRFreeCrtcInfo(crtc);
+            }
+        }
+
+        if (output)
+            XRRFreeOutputInfo(output);
+    }
+
+    XRRFreeScreenResources(res);
+    return count;
+}
+
+static void stop_mpv(pid_t pid)
+{
+    if (pid <= 0)
+        return;
+
+    kill(pid, SIGTERM);
+
+    for (int i = 0; i < 20; i++)
+    {
+        if (waitpid(pid, NULL, WNOHANG) > 0)
+            return;
+
+        usleep(100000);
+    }
+
+    if (process_running(pid))
+        kill(pid, SIGKILL);
+}
+
+static Window create_wallpaper_window(
+    Display *d,
+    Window parent,
+    int screen,
+    const MonitorGeometry *geometry
+)
+{
+    XSetWindowAttributes attrs;
+    Window win;
+
+    memset(&attrs, 0, sizeof(attrs));
+    attrs.background_pixel = BlackPixel(d, screen);
+    attrs.event_mask = StructureNotifyMask | ExposureMask;
+
+    win = XCreateWindow(
+        d,
+        parent,
+        geometry->x,
+        geometry->y,
+        geometry->width,
+        geometry->height,
+        0,
+        CopyFromParent,
+        InputOutput,
+        CopyFromParent,
+        CWBackPixel | CWEventMask,
+        &attrs
+    );
+
+    XStoreName(d, win, "Livepaper");
+    set_window_type_desktop(d, win);
+    set_window_states(d, win);
+
+    XLowerWindow(d, win);
+    XMapWindow(d, win);
+    XLowerWindow(d, win);
+
+    return win;
+}
+
+static pid_t start_mpv(Window win, const char *wallpaper)
+{
+    pid_t pid = fork();
+
+    if (pid < 0)
+    {
+        perror("fork mpv");
+        return -1;
+    }
+
+    if (pid == 0)
+    {
+        char wid_arg[128];
+        snprintf(wid_arg, sizeof(wid_arg), "--wid=0x%lx", win);
+
+        execlp(
+            "mpv",
+            "mpv",
+            wid_arg,
+
+            "--loop-file",
+            "--no-audio",
+            "--no-border",
+            "--no-resume-playback",
+            "--stop-screensaver=no",
+
+            "--osc=no",
+            "--osd-level=0",
+            "--input-default-bindings=no",
+            "--input-vo-keyboard=no",
+            "--no-input-cursor",
+
+            "--hwdec=auto",
+            "--profile=fast",
+            "--vd-lavc-threads=2",
+
+            "--really-quiet",
+            wallpaper,
+            NULL
+        );
+
+        perror("Failed to start mpv");
+        _exit(1);
+    }
+
+    return pid;
+}
+
 void cleanup(int sig)
 {
     (void)sig;
 
     printf("\nStopping Livepaper...\n");
 
-    if (g_mpv_pid > 0)
+    for (int i = 0; i < g_instance_count; i++)
     {
-        kill(g_mpv_pid, SIGTERM);
-
-        for (int i = 0; i < 20; i++)
-        {
-            if (waitpid(g_mpv_pid, NULL, WNOHANG) > 0)
-                break;
-
-            usleep(100000);
-        }
-
-        if (process_running(g_mpv_pid))
-            kill(g_mpv_pid, SIGKILL);
+        stop_mpv(g_instances[i].mpv_pid);
+        g_instances[i].mpv_pid = -1;
     }
 
-    if (g_display && g_window)
+    if (g_display)
     {
-        XDestroyWindow(g_display, g_window);
+        for (int i = 0; i < g_instance_count; i++)
+            if (g_instances[i].window)
+                XDestroyWindow(g_display, g_instances[i].window);
+
         XFlush(g_display);
-        g_window = 0;
     }
 
     if (g_display)
@@ -146,6 +302,7 @@ void cleanup(int sig)
         g_display = NULL;
     }
 
+    g_instance_count = 0;
     remove_runtime_files();
     exit(0);
 }
@@ -175,21 +332,39 @@ int run_wallpaper(const LivepaperConfig *cfg)
     }
 
     int screen = DefaultScreen(d);
-    MonitorGeometry geometry;
+    MonitorGeometry geometries[MAX_WALLPAPER_INSTANCES];
+    int geometry_count = 0;
     DesktopWindowSelection desktop = xwinwrap_find_desktop_window(d);
     Window create_parent = RootWindow(d, screen);
-    int depth = CopyFromParent;
-    int flags = CWBackPixel | CWEventMask;
-    Visual *visual = CopyFromParent;
 
-    if (!get_monitor_geometry(d, cfg->monitor, &geometry))
+    if (strcmp(cfg->monitor, "all") == 0)
+    {
+        geometry_count = get_all_monitor_geometries(
+            d,
+            geometries,
+            MAX_WALLPAPER_INSTANCES
+        );
+
+        if (geometry_count == 0)
+        {
+            fprintf(stderr, "Cannot read monitor list. Falling back to root geometry.\n");
+            geometries[0] = get_root_geometry(d, screen);
+            geometry_count = 1;
+        }
+    }
+    else if (!get_monitor_geometry(d, cfg->monitor, &geometries[0]))
     {
         fprintf(
             stderr,
             "Monitor '%s' was not found. Falling back to all monitors.\n",
             cfg->monitor
         );
-        geometry = get_root_geometry(d, screen);
+        geometries[0] = get_root_geometry(d, screen);
+        geometry_count = 1;
+    }
+    else
+    {
+        geometry_count = 1;
     }
 
     printf("Selected desktop parent window ID: 0x%lx\n", desktop.desktop);
@@ -197,14 +372,6 @@ int run_wallpaper(const LivepaperConfig *cfg)
     printf("xwinwrap root window ID: 0x%lx\n", desktop.root);
     printf("__SWM_VROOT found: %s\n", desktop.swm_vroot_found ? "yes" : "no");
     printf("Nemo desktop found: %s\n", desktop.nemo_found ? "yes" : "no");
-    printf(
-        "Livepaper geometry for monitor '%s': %dx%d+%d+%d\n",
-        cfg->monitor,
-        geometry.width,
-        geometry.height,
-        geometry.x,
-        geometry.y
-    );
 
     XWindowAttributes desktop_attrs;
     if (XGetWindowAttributes(d, desktop.desktop, &desktop_attrs))
@@ -219,104 +386,64 @@ int run_wallpaper(const LivepaperConfig *cfg)
         );
     }
 
-    XSetWindowAttributes attrs;
-    memset(&attrs, 0, sizeof(attrs));
-    attrs.background_pixel = BlackPixel(d, screen);
-    attrs.event_mask = StructureNotifyMask | ExposureMask;
-
-    Window win = XCreateWindow(
-        d,
-        create_parent,
-        geometry.x,
-        geometry.y,
-        geometry.width,
-        geometry.height,
-        0,
-        depth,
-        InputOutput,
-        visual,
-        flags,
-        &attrs
-    );
-
-    XStoreName(d, win, "Livepaper");
-    set_window_type_desktop(d, win);
-    set_window_states(d, win);
-
-    XLowerWindow(d, win);
-    int input_passthrough = enable_input_passthrough(d, win);
-    XMapWindow(d, win);
-    XLowerWindow(d, win);
-    XSync(d, False);
-
     g_display = d;
-    g_window = win;
 
     signal(SIGINT, cleanup);
     signal(SIGTERM, cleanup);
     signal(SIGHUP, cleanup);
 
-    g_mpv_pid = fork();
-
-    if (g_mpv_pid < 0)
+    for (int i = 0; i < geometry_count; i++)
     {
-        perror("fork mpv");
-        cleanup(0);
-    }
+        Window win;
+        pid_t mpv_pid;
+        int input_passthrough;
 
-    if (g_mpv_pid == 0)
-    {
-        char wid_arg[128];
-        snprintf(wid_arg, sizeof(wid_arg), "--wid=0x%lx", win);
-
-        execlp(
-            "mpv",
-            "mpv",
-            wid_arg,
-
-            "--loop-file",
-            "--no-audio",
-            "--no-border",
-            "--no-resume-playback",
-            "--stop-screensaver=no",
-
-            "--osc=no",
-            "--osd-level=0",
-            "--input-default-bindings=no",
-            "--input-vo-keyboard=no",
-            "--no-input-cursor",
-
-            "--hwdec=auto",
-            "--profile=fast",
-            "--vd-lavc-threads=2",
-
-            "--really-quiet",
-            cfg->wallpaper,
-            NULL
+        printf(
+            "Livepaper geometry for monitor '%s': %dx%d+%d+%d\n",
+            geometries[i].name,
+            geometries[i].width,
+            geometries[i].height,
+            geometries[i].x,
+            geometries[i].y
         );
 
-        perror("Failed to start mpv");
-        _exit(1);
+        win = create_wallpaper_window(d, create_parent, screen, &geometries[i]);
+        input_passthrough = enable_input_passthrough(d, win);
+        XSync(d, False);
+
+        mpv_pid = start_mpv(win, cfg->wallpaper);
+        if (mpv_pid < 0)
+            cleanup(0);
+
+        g_instances[g_instance_count].window = win;
+        g_instances[g_instance_count].mpv_pid = mpv_pid;
+        g_instances[g_instance_count].geometry = geometries[i];
+        g_instance_count++;
+
+        printf("Created Livepaper child window ID: 0x%lx\n", win);
+        printf("X Shape input pass-through enabled: %s\n", input_passthrough ? "yes" : "no");
+        printf("MPV PID: %d\n", mpv_pid);
     }
 
     printf("Livepaper started.\n");
-    printf("Created Livepaper child window ID: 0x%lx\n", win);
-    printf("X Shape input pass-through enabled: %s\n", input_passthrough ? "yes" : "no");
     printf("Livepaper PID: %d\n", getpid());
-    printf("MPV PID: %d\n", g_mpv_pid);
 
-    refresh_muffin_stacking_once(d, win);
+    for (int i = 0; i < g_instance_count; i++)
+        refresh_muffin_stacking_once(d, g_instances[i].window);
 
     while (1)
     {
         sleep(5);
 
-        keep_layer_order(d, win);
-
-        if (waitpid(g_mpv_pid, NULL, WNOHANG) > 0)
+        for (int i = 0; i < g_instance_count; i++)
         {
-            printf("MPV exited.\n");
-            cleanup(0);
+            keep_layer_order(d, g_instances[i].window);
+
+            if (waitpid(g_instances[i].mpv_pid, NULL, WNOHANG) > 0)
+            {
+                printf("MPV exited for monitor '%s'.\n", g_instances[i].geometry.name);
+                cleanup(0);
+            }
         }
     }
 
