@@ -61,7 +61,7 @@ static MonitorGeometry get_root_geometry(Display *d, int screen)
     Window root = RootWindow(d, screen);
     XWindowAttributes attrs;
 
-    strcpy(geometry.name, "all");
+    strcpy(geometry.name, "stretched");
     geometry.x = 0;
     geometry.y = 0;
     geometry.width = DisplayWidth(d, screen);
@@ -85,8 +85,18 @@ static int get_monitor_geometry(Display *d, const char *requested, MonitorGeomet
 
     *geometry = get_root_geometry(d, screen);
 
-    if (!requested || strcmp(requested, "all") == 0 || requested[0] == '\0')
+    if (!requested ||
+        strcmp(requested, "all") == 0 ||
+        strcmp(requested, "stretched") == 0 ||
+        requested[0] == '\0')
+    {
+        if (requested && strcmp(requested, "all") == 0)
+            strcpy(geometry->name, "all");
+        else
+            strcpy(geometry->name, "stretched");
+
         return 1;
+    }
 
     res = XRRGetScreenResourcesCurrent(d, root);
     if (!res)
@@ -352,6 +362,11 @@ int run_wallpaper(const LivepaperConfig *cfg)
             geometry_count = 1;
         }
     }
+    else if (strcmp(cfg->monitor, "stretched") == 0)
+    {
+        geometries[0] = get_root_geometry(d, screen);
+        geometry_count = 1;
+    }
     else if (!get_monitor_geometry(d, cfg->monitor, &geometries[0]))
     {
         fprintf(
@@ -470,6 +485,7 @@ void list_monitors(void)
     }
 
     printf("all\n");
+    printf("stretched\n");
 
     for (int i = 0; i < res->noutput; i++)
     {
