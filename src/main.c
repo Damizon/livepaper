@@ -95,7 +95,7 @@ static void start_livepaper(void)
     run_wallpaper(&cfg);
 }
 
-static void stop_livepaper(void)
+static void stop_livepaper(int disable_autostart)
 {
     pid_t pid = read_pid();
 
@@ -103,7 +103,8 @@ static void stop_livepaper(void)
     {
         printf("Livepaper is not running.\n");
         remove_runtime_files();
-        remove_autostart();
+        if (disable_autostart)
+            remove_autostart();
         return;
     }
 
@@ -132,9 +133,44 @@ static void stop_livepaper(void)
     }
 
     remove_runtime_files();
-    remove_autostart();
+    if (disable_autostart)
+        remove_autostart();
 
     printf("Livepaper stopped.\n");
+}
+
+static void stop_livepaper_monitor(const char *monitor)
+{
+    pid_t pid;
+    int has_remaining;
+
+    if (!monitor || strcmp(monitor, "all") == 0 || strcmp(monitor, "stretched") == 0)
+    {
+        stop_livepaper(1);
+        return;
+    }
+
+    has_remaining = remove_monitor_config(monitor);
+    pid = read_pid();
+
+    if (!process_running(pid))
+    {
+        if (!has_remaining)
+        {
+            remove_runtime_files();
+            remove_autostart();
+        }
+
+        printf("Wallpaper stopped for monitor: %s\n", monitor);
+        return;
+    }
+
+    stop_livepaper(!has_remaining);
+
+    if (has_remaining)
+        start_livepaper();
+
+    printf("Wallpaper stopped for monitor: %s\n", monitor);
 }
 
 static void status_livepaper(void)
@@ -154,7 +190,7 @@ static void print_help(void)
         "Usage:\n"
         "  livepaper apply <video_path> [monitor]\n"
         "  livepaper start\n"
-        "  livepaper stop\n"
+        "  livepaper stop [monitor|all]\n"
         "  livepaper status\n"
         "  livepaper monitors\n\n"
         "Examples:\n"
@@ -204,7 +240,12 @@ int main(int argc, char **argv)
 
     if (strcmp(argv[1], "stop") == 0)
     {
-        stop_livepaper();
+        const char *monitor = "all";
+
+        if (argc >= 3)
+            monitor = argv[2];
+
+        stop_livepaper_monitor(monitor);
         return 0;
     }
 

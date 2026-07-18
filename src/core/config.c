@@ -135,6 +135,53 @@ void save_config(const char *wallpaper, const char *monitor, int delay)
     printf("Config saved:\n%s\n", paths->config_file);
 }
 
+int remove_monitor_config(const char *monitor)
+{
+    LivepaperPaths *paths = livepaper_paths();
+    LivepaperConfig cfg;
+    int removed = 0;
+
+    ensure_dirs();
+
+    if (is_global_monitor(monitor))
+        return 0;
+
+    init_config(&cfg);
+    if (!load_config(&cfg))
+        return 0;
+
+    if (strcmp(cfg.mode, "per-monitor") != 0)
+        return 0;
+
+    for (int i = 0; i < cfg.monitor_count; i++)
+    {
+        if (strcmp(cfg.monitors[i].monitor, monitor) == 0)
+        {
+            for (int j = i; j < cfg.monitor_count - 1; j++)
+                cfg.monitors[j] = cfg.monitors[j + 1];
+
+            cfg.monitor_count--;
+            removed = 1;
+            break;
+        }
+    }
+
+    if (!removed)
+        return cfg.monitor_count > 0;
+
+    if (cfg.monitor_count == 0)
+    {
+        cfg.wallpaper[0] = '\0';
+        strcpy(cfg.monitor, "all");
+        strcpy(cfg.mode, "all");
+    }
+
+    write_config_file(&cfg);
+    printf("Config saved:\n%s\n", paths->config_file);
+
+    return cfg.monitor_count > 0;
+}
+
 int load_config(LivepaperConfig *cfg)
 {
     LivepaperPaths *paths = livepaper_paths();

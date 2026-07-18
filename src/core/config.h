@@ -4,6 +4,7 @@
 #include "../../include/config.h"
 
 void save_config(const char *wallpaper, const char *monitor, int delay);
+int remove_monitor_config(const char *monitor);
 int load_config(LivepaperConfig *cfg);
 
 #endif

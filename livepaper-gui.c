@@ -394,14 +394,22 @@ static void on_stop_clicked(GtkButton *button, gpointer data)
     (void)button;
     (void)data;
 
+    char *monitor = gtk_combo_box_text_get_active_text(GTK_COMBO_BOX_TEXT(monitor_combo));
+
+    if (!monitor)
+        monitor = g_strdup("all");
+
     char *livepaper_cmd = get_livepaper_command();
-    char *cmd = g_strdup_printf("%s stop", livepaper_cmd);
+    char *quoted_monitor = g_shell_quote(monitor);
+    char *cmd = g_strdup_printf("%s stop %s", livepaper_cmd, quoted_monitor);
 
     if (run_command(cmd))
         set_status("Wallpaper stopped.");
 
     g_free(cmd);
     g_free(livepaper_cmd);
+    g_free(quoted_monitor);
+    g_free(monitor);
 }
 
 static void on_refresh_clicked(GtkButton *button, gpointer data)
