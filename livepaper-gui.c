@@ -507,7 +507,12 @@ static GtkWidget *create_wallpaper_card(const char *file_name, const char *full_
 
     GtkWidget *label = gtk_label_new(file_name);
     gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_END);
+    gtk_label_set_single_line_mode(GTK_LABEL(label), TRUE);
+    gtk_label_set_lines(GTK_LABEL(label), 1);
+    gtk_label_set_width_chars(GTK_LABEL(label), 22);
+    gtk_label_set_max_width_chars(GTK_LABEL(label), 22);
     gtk_widget_set_size_request(label, 160, -1);
+    gtk_widget_set_tooltip_text(label, file_name);
 
     gtk_box_append(GTK_BOX(box), picture);
     gtk_box_append(GTK_BOX(box), label);
