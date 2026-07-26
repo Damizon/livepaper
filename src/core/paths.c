@@ -9,6 +9,16 @@
 #include <sys/stat.h>
 
 static LivepaperPaths g_paths;
+static const char *localized_videos_dirs[] = {
+    "Wideo",
+    "Vidéos",
+    "Vídeos",
+    "Video",
+    "Filmy",
+    "Film",
+    "Videos",
+    NULL
+};
 
 LivepaperPaths *livepaper_paths(void)
 {
@@ -144,12 +154,55 @@ int read_xdg_videos_dir(char *dst, size_t size)
     return 0;
 }
 
+static int path_is_dir(const char *path)
+{
+    struct stat st;
+
+    return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
+}
+
+static int find_existing_videos_dir(char *dst, size_t size)
+{
+    const char *home = getenv("HOME");
+
+    if (!home)
+        return 0;
+
+    for (int i = 0; localized_videos_dirs[i]; i++)
+    {
+        char candidate[PATH_BUF];
+
+        if (!safe_snprintf(candidate, sizeof(candidate), "%s/%s", home, localized_videos_dirs[i]))
+            continue;
+
+        if (!path_is_dir(candidate))
+            continue;
+
+        if (!safe_snprintf(dst, size, "%s", candidate))
+            return 0;
+
+        return 1;
+    }
+
+    return 0;
+}
+
 void build_wallpaper_dir(char *dst, size_t size)
 {
     const char *home = getenv("HOME");
     char videos_dir[PATH_BUF];
 
     if (read_xdg_videos_dir(videos_dir, sizeof(videos_dir)))
+    {
+        if (!safe_snprintf(dst, size, "%s/Livepaper", videos_dir))
+        {
+            fprintf(stderr, "Path is too long.\n");
+            exit(1);
+        }
+        return;
+    }
+
+    if (find_existing_videos_dir(videos_dir, sizeof(videos_dir)))
     {
         if (!safe_snprintf(dst, size, "%s/Livepaper", videos_dir))
         {

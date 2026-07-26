@@ -2,7 +2,7 @@
 set -eu
 
 PACKAGE=livepaper
-VERSION=${VERSION:-1.2.0}
+VERSION=${VERSION:-1.3.0}
 ARCH=$(dpkg --print-architecture)
 ROOT=build/deb-root
 OUTDIR=build/packages
@@ -57,6 +57,15 @@ create_livepaper_dir() {
                 videos_dir="$home_dir/$videos_dir"
                 ;;
         esac
+    fi
+
+    if [ -z "$videos_dir" ]; then
+        for dir_name in Wideo Vidéos Vídeos Video Filmy Film Videos; do
+            if [ -d "$home_dir/$dir_name" ]; then
+                videos_dir="$home_dir/$dir_name"
+                break
+            fi
+        done
     fi
 
     if [ -z "$videos_dir" ]; then

@@ -18,6 +18,17 @@ GtkWidget *selected_wallpaper_button = NULL;
 
 char selected_wallpaper[PATH_MAX] = "";
 
+static const char *localized_videos_dirs[] = {
+    "Wideo",
+    "Vidéos",
+    "Vídeos",
+    "Video",
+    "Filmy",
+    "Film",
+    "Videos",
+    NULL
+};
+
 static char *make_home_path(const char *relative)
 {
     static char path[PATH_MAX];
@@ -36,7 +47,23 @@ static const char *get_wallpaper_dir(void)
     if (videos_dir && *videos_dir && g_strcmp0(videos_dir, home) != 0)
         snprintf(path, sizeof(path), "%s/Livepaper", videos_dir);
     else
+    {
+        for (int i = 0; localized_videos_dirs[i]; i++)
+        {
+            char *candidate = g_build_filename(home, localized_videos_dirs[i], NULL);
+
+            if (g_file_test(candidate, G_FILE_TEST_IS_DIR))
+            {
+                snprintf(path, sizeof(path), "%s/Livepaper", candidate);
+                g_free(candidate);
+                return path;
+            }
+
+            g_free(candidate);
+        }
+
         snprintf(path, sizeof(path), "%s/Videos/Livepaper", home);
+    }
 
     return path;
 }

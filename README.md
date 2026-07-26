@@ -1,6 +1,6 @@
 # Livepaper
 
-Livepaper 1.2.0 is a stable video wallpaper manager for Linux Mint Cinnamon on
+Livepaper 1.3.0 is a stable video wallpaper manager for Linux Mint Cinnamon on
 X11/Nemo desktops. It places a looping video behind the desktop icons and
 provides both a GTK4 interface and a command-line tool.
 
@@ -15,7 +15,7 @@ provides both a GTK4 interface and a command-line tool.
 
 ## Requirements
 
-Livepaper 1.2.0 is designed for:
+Livepaper 1.3.0 is designed for:
 
 - Linux Mint Cinnamon
 - X11 session
@@ -35,8 +35,8 @@ Runtime dependencies are handled by the `.deb` package:
 Download the `.deb` package from GitHub Releases and install it:
 
 ```bash
-curl -LO https://github.com/Damizon/livepaper/releases/download/v1.2.0/livepaper_1.2.0_amd64.deb
-sudo apt install ./livepaper_1.2.0_amd64.deb
+curl -LO https://github.com/Damizon/livepaper/releases/download/v1.3.0/livepaper_1.3.0_amd64.deb
+sudo apt install ./livepaper_1.3.0_amd64.deb
 ```
 
 Or clone the repository, build the package, and install the generated `.deb`:
@@ -45,7 +45,7 @@ Or clone the repository, build the package, and install the generated `.deb`:
 git clone https://github.com/Damizon/livepaper.git
 cd livepaper
 make deb
-sudo apt install ./build/packages/livepaper_1.2.0_amd64.deb
+sudo apt install ./build/packages/livepaper_1.3.0_amd64.deb
 ```
 
 After installation, launch **Livepaper** from the application menu.
@@ -60,7 +60,8 @@ Put your video wallpapers in the `Livepaper` folder inside your system Videos di
 
 On localized systems this may be a translated Videos directory, for example
 `~/Wideo/Livepaper` or `~/Vidéos/Livepaper`. Livepaper uses the system XDG
-Videos location when it is available.
+Videos location when it is available, and falls back to existing localized video
+folders before creating `~/Videos/Livepaper`.
 
 Supported extensions in the GUI:
 
@@ -149,6 +150,17 @@ build/packages/
 ```
 
 ## Release Notes
+
+### 1.3.0
+
+- Improved wallpaper folder detection for localized Linux Mint systems.
+- Installation, CLI startup, and the GTK interface now use the configured XDG
+  Videos directory first.
+- If XDG Videos is unavailable or points to `$HOME`, Livepaper now checks for
+  existing localized video folders such as `Wideo`, `Vidéos`, `Vídeos`, `Video`,
+  `Filmy`, and `Film` before falling back to `Videos`.
+- Prevented accidental creation of `~/Videos/Livepaper` on systems that already
+  have a localized videos folder but incomplete XDG user-dir configuration.
 
 ### 1.2.0
 

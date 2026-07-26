@@ -43,7 +43,17 @@ install_build_deps
 
 VIDEOS_DIR="$(xdg-user-dir VIDEOS 2>/dev/null || true)"
 if [ -z "$VIDEOS_DIR" ] || [ "$VIDEOS_DIR" = "$HOME" ]; then
-    VIDEOS_DIR="$HOME/Videos"
+    VIDEOS_DIR=
+    for dir_name in Wideo Vidéos Vídeos Video Filmy Film Videos; do
+        if [ -d "$HOME/$dir_name" ]; then
+            VIDEOS_DIR="$HOME/$dir_name"
+            break
+        fi
+    done
+
+    if [ -z "$VIDEOS_DIR" ]; then
+        VIDEOS_DIR="$HOME/Videos"
+    fi
 fi
 mkdir -p "$VIDEOS_DIR/Livepaper"
 mkdir -p "$HOME/.config/livepaper"
