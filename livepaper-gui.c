@@ -15,6 +15,7 @@ GtkWidget *wallpaper_grid;
 GtkWidget *monitor_combo;
 GtkWidget *fit_combo;
 GtkWidget *status_label;
+GtkWidget *download_progress;
 GtkWidget *source_entry;
 GtkWidget *source_bar;
 GtkWidget *source_action_button;
@@ -36,6 +37,13 @@ SourceMode active_source_mode = SOURCE_MODE_LOCAL;
 
 static void set_status(const char *text);
 static void refresh_wallpapers(void);
+
+static void flush_ui(void)
+{
+    while (g_main_context_iteration(NULL, FALSE))
+    {
+    }
+}
 
 static void set_stream_url_selected(int selected)
 {
@@ -230,6 +238,80 @@ static void set_status(const char *text)
 {
     gtk_label_set_text(GTK_LABEL(status_label), text);
     gtk_widget_set_tooltip_text(status_label, text);
+}
+
+static void set_download_progress_visible(int visible)
+{
+    if (!download_progress)
+        return;
+
+    gtk_widget_set_visible(download_progress, visible);
+
+    if (!visible)
+    {
+        gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(download_progress), 0.0);
+        gtk_progress_bar_set_text(GTK_PROGRESS_BAR(download_progress), "");
+    }
+
+    flush_ui();
+}
+
+static void set_download_progress(double fraction)
+{
+    char percent_text[16];
+
+    if (!download_progress)
+        return;
+
+    if (fraction < 0.0)
+        fraction = 0.0;
+    if (fraction > 1.0)
+        fraction = 1.0;
+
+    snprintf(percent_text, sizeof(percent_text), "%.0f%%", fraction * 100.0);
+    gtk_progress_bar_set_fraction(GTK_PROGRESS_BAR(download_progress), fraction);
+    gtk_progress_bar_set_text(GTK_PROGRESS_BAR(download_progress), percent_text);
+    gtk_widget_set_visible(download_progress, TRUE);
+    flush_ui();
+}
+
+static int parse_download_percent(const char *line, double *fraction)
+{
+    const char *percent = strchr(line, '%');
+    const char *start;
+    char number[32];
+    size_t len;
+    char *end = NULL;
+    double value;
+
+    if (!percent)
+        return 0;
+
+    start = percent;
+    while (start > line &&
+           (g_ascii_isdigit((guchar)*(start - 1)) ||
+            *(start - 1) == '.' ||
+            *(start - 1) == ' '))
+    {
+        start--;
+    }
+
+    while (*start == ' ')
+        start++;
+
+    len = percent - start;
+    if (len == 0 || len >= sizeof(number))
+        return 0;
+
+    memcpy(number, start, len);
+    number[len] = '\0';
+
+    value = g_ascii_strtod(number, &end);
+    if (end == number)
+        return 0;
+
+    *fraction = value / 100.0;
+    return 1;
 }
 
 static int run_command(const char *cmd)
@@ -443,6 +525,7 @@ static int download_stream_to_file(const char *url, char *downloaded_path, size_
     quoted_yt_dlp = g_shell_quote(yt_dlp);
     cmd = g_strdup_printf(
         "%s --no-playlist --merge-output-format mp4 "
+        "--newline --progress-template 'download:%%(progress._percent_str)s' "
         "-f 'bestvideo/best/bv*/b' "
         "--print after_move:filepath -o %s %s 2>&1",
         quoted_yt_dlp,
@@ -451,9 +534,8 @@ static int download_stream_to_file(const char *url, char *downloaded_path, size_
     );
 
     set_status("Downloading...");
-    while (g_main_context_iteration(NULL, FALSE))
-    {
-    }
+    set_download_progress_visible(1);
+    set_download_progress(0.0);
 
     fp = popen(cmd, "r");
 
@@ -463,8 +545,19 @@ static int download_stream_to_file(const char *url, char *downloaded_path, size_
     {
         while (fgets(line, sizeof(line), fp))
         {
+            double fraction;
+
             line[strcspn(line, "\n")] = '\0';
             fprintf(stderr, "yt-dlp: %s\n", line);
+
+            if (parse_download_percent(line, &fraction))
+            {
+                char status_text[64];
+
+                snprintf(status_text, sizeof(status_text), "Downloading... %.0f%%", fraction * 100.0);
+                set_status(status_text);
+                set_download_progress(fraction);
+            }
 
             if (is_video_file(line) && g_file_test(line, G_FILE_TEST_EXISTS))
                 g_strlcpy(downloaded_path, line, size);
@@ -486,10 +579,13 @@ static int download_stream_to_file(const char *url, char *downloaded_path, size_
 
     if (status != 0 || downloaded_path[0] == '\0')
     {
+        set_download_progress_visible(0);
         set_status("Download failed.");
         return 0;
     }
 
+    set_download_progress(1.0);
+    set_download_progress_visible(0);
     set_status("Download complete.");
     return 1;
 }
@@ -1033,14 +1129,25 @@ static void app_activate(GtkApplication *app, gpointer user_data)
 
     gtk_box_append(GTK_BOX(main_box), button_box);
 
+    GtkWidget *status_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+
     status_label = gtk_label_new("Ready.");
+    download_progress = gtk_progress_bar_new();
+
+    gtk_widget_set_hexpand(status_box, TRUE);
     gtk_widget_set_halign(status_label, GTK_ALIGN_START);
     gtk_widget_set_hexpand(status_label, TRUE);
     gtk_label_set_ellipsize(GTK_LABEL(status_label), PANGO_ELLIPSIZE_END);
     gtk_label_set_single_line_mode(GTK_LABEL(status_label), TRUE);
     gtk_label_set_width_chars(GTK_LABEL(status_label), 1);
     gtk_label_set_max_width_chars(GTK_LABEL(status_label), 90);
-    gtk_box_append(GTK_BOX(main_box), status_label);
+    gtk_widget_set_size_request(download_progress, 180, -1);
+    gtk_widget_set_visible(download_progress, FALSE);
+    gtk_progress_bar_set_show_text(GTK_PROGRESS_BAR(download_progress), TRUE);
+
+    gtk_box_append(GTK_BOX(status_box), status_label);
+    gtk_box_append(GTK_BOX(status_box), download_progress);
+    gtk_box_append(GTK_BOX(main_box), status_box);
 
     g_signal_connect(apply_button, "clicked", G_CALLBACK(on_apply_clicked), NULL);
     g_signal_connect(stop_button, "clicked", G_CALLBACK(on_stop_clicked), NULL);
