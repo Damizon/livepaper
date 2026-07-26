@@ -45,10 +45,19 @@ static void start_livepaper(void)
     {
         fprintf(stderr, "No wallpaper configured. Use:\n");
         fprintf(stderr, "  livepaper apply /path/to/video.mp4 [monitor]\n");
+        fprintf(stderr, "  livepaper apply-url <url> [monitor]\n");
         exit(1);
     }
 
-    if (strcmp(cfg.mode, "per-monitor") == 0)
+    if (strcmp(cfg.source, "stream") == 0)
+    {
+        if (cfg.wallpaper[0] == '\0')
+        {
+            fprintf(stderr, "Streaming URL is empty.\n");
+            exit(1);
+        }
+    }
+    else if (strcmp(cfg.mode, "per-monitor") == 0)
     {
         for (int i = 0; i < cfg.monitor_count; i++)
         {
@@ -189,12 +198,14 @@ static void print_help(void)
         "Livepaper\n\n"
         "Usage:\n"
         "  livepaper apply <video_path> [monitor] [delay] [fit]\n"
+        "  livepaper apply-url <url> [monitor] [delay] [fit]\n"
         "  livepaper start\n"
         "  livepaper stop [monitor|all]\n"
         "  livepaper status\n"
         "  livepaper monitors\n\n"
         "Examples:\n"
         "  livepaper apply ~/Videos/Livepaper/wallpaper.mp4 all\n"
+        "  livepaper apply-url https://example.com/wallpaper.mp4 all\n"
         "  livepaper start\n"
         "  livepaper stop\n"
     );
@@ -233,6 +244,31 @@ int main(int argc, char **argv)
             fit = argv[5];
 
         save_config_with_fit(argv[2], monitor, delay, fit);
+        return 0;
+    }
+
+    if (strcmp(argv[1], "apply-url") == 0)
+    {
+        if (argc < 3)
+        {
+            fprintf(stderr, "Missing streaming URL.\n");
+            return 1;
+        }
+
+        const char *monitor = "all";
+        int delay = -1;
+        const char *fit = NULL;
+
+        if (argc >= 4)
+            monitor = argv[3];
+
+        if (argc >= 5)
+            delay = atoi(argv[4]);
+
+        if (argc >= 6)
+            fit = argv[5];
+
+        save_stream_config_with_fit(argv[2], monitor, delay, fit);
         return 0;
     }
 

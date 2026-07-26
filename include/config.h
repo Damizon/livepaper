@@ -12,6 +12,7 @@ typedef struct
 
 typedef struct
 {
+    char source[32];
     char wallpaper[PATH_BUF];
     char monitor[256];
     char mode[32];

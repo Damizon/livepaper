@@ -26,6 +26,7 @@ static void copy_string(char *dst, size_t size, const char *src)
 
 static void init_config(LivepaperConfig *cfg)
 {
+    strcpy(cfg->source, "local");
     cfg->wallpaper[0] = '\0';
     strcpy(cfg->monitor, "all");
     strcpy(cfg->mode, "all");
@@ -103,6 +104,7 @@ static void write_config_file(const LivepaperConfig *cfg)
     }
 
     fprintf(f, "mode=%s\n", cfg->mode);
+    fprintf(f, "source=%s\n", cfg->source);
     fprintf(f, "wallpaper=%s\n", cfg->wallpaper);
     fprintf(f, "monitor=%s\n", cfg->monitor);
     fprintf(f, "fit=%s\n", cfg->fit);
@@ -140,6 +142,7 @@ void save_config_with_fit(const char *wallpaper, const char *monitor, int delay,
 
     cfg.delay = delay;
     clamp_delay(&cfg);
+    strcpy(cfg.source, "local");
     copy_string(cfg.fit, sizeof(cfg.fit), normalize_fit(fit ? fit : cfg.fit));
 
     if (is_global_monitor(monitor))
@@ -156,6 +159,32 @@ void save_config_with_fit(const char *wallpaper, const char *monitor, int delay,
         copy_string(cfg.wallpaper, sizeof(cfg.wallpaper), wallpaper);
         set_monitor_wallpaper(&cfg, monitor, wallpaper);
     }
+
+    write_config_file(&cfg);
+
+    printf("Config saved:\n%s\n", paths->config_file);
+}
+
+void save_stream_config_with_fit(const char *url, const char *monitor, int delay, const char *fit)
+{
+    LivepaperPaths *paths = livepaper_paths();
+    LivepaperConfig cfg;
+
+    ensure_dirs();
+    init_config(&cfg);
+    load_config(&cfg);
+
+    if (delay < 0)
+        delay = cfg.delay;
+
+    cfg.delay = delay;
+    clamp_delay(&cfg);
+    strcpy(cfg.source, "stream");
+    copy_string(cfg.fit, sizeof(cfg.fit), normalize_fit(fit ? fit : cfg.fit));
+    copy_string(cfg.wallpaper, sizeof(cfg.wallpaper), url);
+    copy_string(cfg.monitor, sizeof(cfg.monitor), monitor && monitor[0] ? monitor : "all");
+    copy_string(cfg.mode, sizeof(cfg.mode), cfg.monitor);
+    cfg.monitor_count = 0;
 
     write_config_file(&cfg);
 
@@ -226,6 +255,13 @@ int load_config(LivepaperConfig *cfg)
         {
             copy_string(cfg->wallpaper, sizeof(cfg->wallpaper), line + 10);
             cfg->wallpaper[strcspn(cfg->wallpaper, "\n")] = 0;
+        }
+        else if (strncmp(line, "source=", 7) == 0)
+        {
+            copy_string(cfg->source, sizeof(cfg->source), line + 7);
+            cfg->source[strcspn(cfg->source, "\n")] = 0;
+            if (strcmp(cfg->source, "stream") != 0)
+                strcpy(cfg->source, "local");
         }
         else if (strncmp(line, "mode=", 5) == 0)
         {

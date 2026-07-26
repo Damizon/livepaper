@@ -43,6 +43,7 @@ typedef struct WallpaperTarget
     MonitorGeometry geometry;
     char wallpaper[PATH_BUF];
     char fit[32];
+    int is_stream;
 } WallpaperTarget;
 
 static WallpaperInstance g_instances[MAX_WALLPAPER_INSTANCES];
@@ -262,7 +263,7 @@ static Window create_wallpaper_window(
     return win;
 }
 
-static pid_t start_mpv(Window win, const char *wallpaper, const char *fit, const MonitorGeometry *geometry)
+static pid_t start_mpv(Window win, const char *wallpaper, const char *fit, int is_stream, const MonitorGeometry *geometry)
 {
     pid_t pid = fork();
 
@@ -276,8 +277,10 @@ static pid_t start_mpv(Window win, const char *wallpaper, const char *fit, const
     {
         char wid_arg[128];
         char aspect_arg[128];
+        char ytdlp_path[PATH_BUF];
+        char ytdlp_opt[PATH_BUF + 64];
         const char *fit_mode = fit ? fit : "none";
-        const char *args[40];
+        const char *args[44];
         int argc = 0;
 
         snprintf(wid_arg, sizeof(wid_arg), "--wid=0x%lx", win);
@@ -286,6 +289,22 @@ static pid_t start_mpv(Window win, const char *wallpaper, const char *fit, const
             sizeof(aspect_arg),
             "--video-aspect-override=%.12g",
             geometry->height > 0 ? (double)geometry->width / (double)geometry->height : 1.0
+        );
+
+        const char *home = getenv("HOME");
+        if (home)
+            snprintf(ytdlp_path, sizeof(ytdlp_path), "%s/.local/bin/yt-dlp", home);
+        else
+            snprintf(ytdlp_path, sizeof(ytdlp_path), "yt-dlp");
+
+        if (!home || access(ytdlp_path, X_OK) != 0)
+            snprintf(ytdlp_path, sizeof(ytdlp_path), "yt-dlp");
+
+        snprintf(
+            ytdlp_opt,
+            sizeof(ytdlp_opt),
+            "--script-opts=ytdl_hook-ytdl_path=%s",
+            ytdlp_path
         );
 
         args[argc++] = "mpv";
@@ -309,7 +328,17 @@ static pid_t start_mpv(Window win, const char *wallpaper, const char *fit, const
         else if (strcmp(fit_mode, "stretch") == 0)
             args[argc++] = aspect_arg;
 
-        args[argc++] = "--really-quiet";
+        if (is_stream)
+        {
+            args[argc++] = "--ytdl=yes";
+            args[argc++] = ytdlp_opt;
+            args[argc++] = "--ytdl-format=bestvideo/best/bv*/b";
+        }
+        else
+        {
+            args[argc++] = "--really-quiet";
+        }
+
         args[argc++] = wallpaper;
         args[argc] = NULL;
 
@@ -400,6 +429,7 @@ int run_wallpaper(const LivepaperConfig *cfg)
 
             copy_string(targets[target_count].wallpaper, sizeof(targets[target_count].wallpaper), cfg->monitors[i].wallpaper);
             copy_string(targets[target_count].fit, sizeof(targets[target_count].fit), cfg->fit);
+            targets[target_count].is_stream = 0;
             target_count++;
         }
 
@@ -430,6 +460,7 @@ int run_wallpaper(const LivepaperConfig *cfg)
             targets[target_count].geometry = geometries[i];
             copy_string(targets[target_count].wallpaper, sizeof(targets[target_count].wallpaper), cfg->wallpaper);
             copy_string(targets[target_count].fit, sizeof(targets[target_count].fit), cfg->fit);
+            targets[target_count].is_stream = strcmp(cfg->source, "stream") == 0;
             target_count++;
         }
     }
@@ -438,6 +469,7 @@ int run_wallpaper(const LivepaperConfig *cfg)
         targets[0].geometry = get_root_geometry(d, screen);
         copy_string(targets[0].wallpaper, sizeof(targets[0].wallpaper), cfg->wallpaper);
         copy_string(targets[0].fit, sizeof(targets[0].fit), cfg->fit);
+        targets[0].is_stream = strcmp(cfg->source, "stream") == 0;
         target_count = 1;
     }
     else if (!get_monitor_geometry(d, cfg->monitor, &targets[0].geometry))
@@ -450,12 +482,14 @@ int run_wallpaper(const LivepaperConfig *cfg)
         targets[0].geometry = get_root_geometry(d, screen);
         copy_string(targets[0].wallpaper, sizeof(targets[0].wallpaper), cfg->wallpaper);
         copy_string(targets[0].fit, sizeof(targets[0].fit), cfg->fit);
+        targets[0].is_stream = strcmp(cfg->source, "stream") == 0;
         target_count = 1;
     }
     else
     {
         copy_string(targets[0].wallpaper, sizeof(targets[0].wallpaper), cfg->wallpaper);
         copy_string(targets[0].fit, sizeof(targets[0].fit), cfg->fit);
+        targets[0].is_stream = strcmp(cfg->source, "stream") == 0;
         target_count = 1;
     }
 
@@ -503,7 +537,7 @@ int run_wallpaper(const LivepaperConfig *cfg)
         input_passthrough = enable_input_passthrough(d, win);
         XSync(d, False);
 
-        mpv_pid = start_mpv(win, targets[i].wallpaper, targets[i].fit, &targets[i].geometry);
+        mpv_pid = start_mpv(win, targets[i].wallpaper, targets[i].fit, targets[i].is_stream, &targets[i].geometry);
         if (mpv_pid < 0)
             cleanup(0);
 

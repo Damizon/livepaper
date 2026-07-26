@@ -32,10 +32,11 @@ install_build_deps()
             mpv \
             procps \
             ffmpegthumbnailer \
+            yt-dlp \
             desktop-file-utils
     else
         echo "apt-get not found; install these dependencies manually:" >&2
-        echo "  gcc make pkg-config libx11-dev libxrandr-dev libgtk-4-dev mpv procps ffmpegthumbnailer" >&2
+        echo "  gcc make pkg-config libx11-dev libxrandr-dev libgtk-4-dev mpv procps ffmpegthumbnailer yt-dlp" >&2
     fi
 }
 

@@ -118,7 +118,7 @@ EOF_SHLIBDEPS_CONTROL
 )
 
 SHLIBS_DEPENDS=$(sed -n 's/^shlibs:Depends=//p' "$SUBSTVARS")
-RUNTIME_DEPENDS="mpv, procps, ffmpegthumbnailer"
+RUNTIME_DEPENDS="mpv, procps, ffmpegthumbnailer, yt-dlp"
 
 cat > "$CONTROL" <<EOF_CONTROL
 Package: $PACKAGE

@@ -5,6 +5,7 @@
 
 void save_config(const char *wallpaper, const char *monitor, int delay);
 void save_config_with_fit(const char *wallpaper, const char *monitor, int delay, const char *fit);
+void save_stream_config_with_fit(const char *url, const char *monitor, int delay, const char *fit);
 int remove_monitor_config(const char *monitor);
 int load_config(LivepaperConfig *cfg);
 
