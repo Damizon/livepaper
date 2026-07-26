@@ -221,8 +221,6 @@ static void load_css(void)
         ".wallpaper-thumb {"
         "  min-width: 160px;"
         "  min-height: 90px;"
-        "  max-width: 160px;"
-        "  max-height: 90px;"
         "}";
 
     gtk_css_provider_load_from_string(provider, css);
@@ -504,6 +502,14 @@ static GtkWidget *create_wallpaper_card(const char *file_name, const char *full_
     gtk_widget_add_css_class(button, "wallpaper-card");
     gtk_widget_set_hexpand(button, FALSE);
     gtk_widget_set_vexpand(button, FALSE);
+    gtk_widget_set_halign(button, GTK_ALIGN_START);
+    gtk_widget_set_valign(button, GTK_ALIGN_START);
+
+    gtk_widget_set_size_request(box, 168, 132);
+    gtk_widget_set_hexpand(box, FALSE);
+    gtk_widget_set_vexpand(box, FALSE);
+    gtk_widget_set_halign(box, GTK_ALIGN_CENTER);
+    gtk_widget_set_valign(box, GTK_ALIGN_CENTER);
 
     char thumb_path[PATH_MAX];
     create_thumbnail(full_path, thumb_path, sizeof(thumb_path));
@@ -520,11 +526,14 @@ static GtkWidget *create_wallpaper_card(const char *file_name, const char *full_
     gtk_widget_set_hexpand(picture, FALSE);
     gtk_widget_set_vexpand(picture, FALSE);
     gtk_widget_set_halign(picture, GTK_ALIGN_CENTER);
+    gtk_widget_set_valign(picture, GTK_ALIGN_START);
     gtk_picture_set_content_fit(GTK_PICTURE(picture), GTK_CONTENT_FIT_COVER);
 
     GtkWidget *label = gtk_label_new(file_name);
     gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_END);
     gtk_widget_set_size_request(label, 160, -1);
+    gtk_widget_set_hexpand(label, FALSE);
+    gtk_widget_set_halign(label, GTK_ALIGN_CENTER);
 
     gtk_box_append(GTK_BOX(box), picture);
     gtk_box_append(GTK_BOX(box), label);
