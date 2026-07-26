@@ -1,6 +1,6 @@
 # Livepaper
 
-Livepaper 1.3.0 is a stable video wallpaper manager for Linux Mint Cinnamon on
+Livepaper 2.0.0 is a stable video wallpaper manager for Linux Mint Cinnamon on
 X11/Nemo desktops. It places a looping video behind the desktop icons and
 provides both a GTK4 interface and a command-line tool.
 
@@ -15,7 +15,7 @@ provides both a GTK4 interface and a command-line tool.
 
 ## Requirements
 
-Livepaper 1.3.0 is designed for:
+Livepaper 2.0.0 is designed for:
 
 - Linux Mint Cinnamon
 - X11 session
@@ -35,8 +35,8 @@ Runtime dependencies are handled by the `.deb` package:
 Download the `.deb` package from GitHub Releases and install it:
 
 ```bash
-curl -LO https://github.com/Damizon/livepaper/releases/download/v1.3.0/livepaper_1.3.0_amd64.deb
-sudo apt install ./livepaper_1.3.0_amd64.deb
+curl -LO https://github.com/Damizon/livepaper/releases/download/v2.0.0/livepaper_2.0.0_amd64.deb
+sudo apt install ./livepaper_2.0.0_amd64.deb
 ```
 
 Or clone the repository, build the package, and install the generated `.deb`:
@@ -45,7 +45,7 @@ Or clone the repository, build the package, and install the generated `.deb`:
 git clone https://github.com/Damizon/livepaper.git
 cd livepaper
 make deb
-sudo apt install ./build/packages/livepaper_1.3.0_amd64.deb
+sudo apt install ./build/packages/livepaper_2.0.0_amd64.deb
 ```
 
 After installation, launch **Livepaper** from the application menu.
@@ -150,6 +150,18 @@ build/packages/
 ```
 
 ## Release Notes
+
+### 2.0.0
+
+- Added Local and Streaming modes to the GTK interface.
+- Added direct streaming playback from pasted video URLs.
+- Added optional Download mode for streaming URLs, saving videos permanently to
+  the `downloaded` folder inside the Livepaper video directory.
+- Downloaded streaming videos appear as normal thumbnails in Streaming mode and
+  can be selected and applied like local wallpapers.
+- Added download safety checks for live streams, unknown durations, and long
+  videos over 30 minutes.
+- Added a download progress indicator with percentage status in the GUI.
 
 ### 1.3.0
 
