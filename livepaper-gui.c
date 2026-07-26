@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 
 #define CONFIG_DIR ".config/livepaper"
 #define CONFIG_FILE ".config/livepaper/config.ini"
@@ -20,6 +21,7 @@ GtkWidget *source_action_button;
 GtkWidget *local_mode_button;
 GtkWidget *streaming_mode_button;
 GtkWidget *selected_wallpaper_button = NULL;
+GtkWindow *main_window = NULL;
 
 char selected_wallpaper[PATH_MAX] = "";
 int stream_url_selected = 0;
@@ -227,6 +229,7 @@ static void load_css(void)
 static void set_status(const char *text)
 {
     gtk_label_set_text(GTK_LABEL(status_label), text);
+    gtk_widget_set_tooltip_text(status_label, text);
 }
 
 static int run_command(const char *cmd)
@@ -243,10 +246,170 @@ static int run_command(const char *cmd)
     return 0;
 }
 
-static int download_stream_to_file(const char *url, char *downloaded_path, size_t size)
+static char *find_yt_dlp(void)
 {
     char *local_yt_dlp = g_build_filename(g_get_home_dir(), ".local", "bin", "yt-dlp", NULL);
     char *yt_dlp = NULL;
+
+    if (g_file_test(local_yt_dlp, G_FILE_TEST_IS_EXECUTABLE))
+        yt_dlp = g_strdup(local_yt_dlp);
+    else
+        yt_dlp = g_find_program_in_path("yt-dlp");
+
+    g_free(local_yt_dlp);
+    return yt_dlp;
+}
+
+static int command_exit_success(int status)
+{
+    return status != -1 && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+}
+
+typedef struct ConfirmDialogState
+{
+    GMainLoop *loop;
+    int response;
+} ConfirmDialogState;
+
+static void on_confirm_dialog_response(GtkDialog *dialog, int response, gpointer data)
+{
+    ConfirmDialogState *state = data;
+
+    state->response = response;
+    gtk_window_destroy(GTK_WINDOW(dialog));
+    g_main_loop_quit(state->loop);
+}
+
+static int confirm_long_download(double duration)
+{
+    int minutes = (int)((duration + 59) / 60);
+    char *message = g_strdup_printf(
+        "This video is about %d minutes long and may use a lot of disk space. Download anyway?",
+        minutes
+    );
+    GtkWidget *dialog = gtk_message_dialog_new(
+        main_window,
+        GTK_DIALOG_MODAL,
+        GTK_MESSAGE_WARNING,
+        GTK_BUTTONS_NONE,
+        "%s",
+        message
+    );
+    ConfirmDialogState state;
+
+    state.loop = g_main_loop_new(NULL, FALSE);
+    state.response = GTK_RESPONSE_CANCEL;
+
+    gtk_dialog_add_button(GTK_DIALOG(dialog), "Cancel", GTK_RESPONSE_CANCEL);
+    gtk_dialog_add_button(GTK_DIALOG(dialog), "Download", GTK_RESPONSE_ACCEPT);
+    g_signal_connect(dialog, "response", G_CALLBACK(on_confirm_dialog_response), &state);
+    gtk_window_present(GTK_WINDOW(dialog));
+    g_main_loop_run(state.loop);
+
+    g_main_loop_unref(state.loop);
+    g_free(message);
+
+    return state.response == GTK_RESPONSE_ACCEPT;
+}
+
+static int stream_metadata_allows_download(const char *url, const char *yt_dlp)
+{
+    char *quoted_yt_dlp = g_shell_quote(yt_dlp);
+    char *quoted_url = g_shell_quote(url);
+    char *cmd = g_strdup_printf(
+        "%s --no-playlist --skip-download "
+        "--print '%%(duration)s|%%(is_live)s|%%(live_status)s' %s 2>/dev/null",
+        quoted_yt_dlp,
+        quoted_url
+    );
+    FILE *fp = popen(cmd, "r");
+    char metadata_line[384] = "";
+    int status = -1;
+
+    if (fp)
+    {
+        if (!fgets(metadata_line, sizeof(metadata_line), fp))
+            metadata_line[0] = '\0';
+        status = pclose(fp);
+    }
+
+    g_free(cmd);
+    g_free(quoted_url);
+    g_free(quoted_yt_dlp);
+
+    if (!command_exit_success(status) || metadata_line[0] == '\0')
+    {
+        set_status("Download blocked: cannot read video metadata.");
+        return 0;
+    }
+
+    metadata_line[strcspn(metadata_line, "\n")] = '\0';
+
+    char *duration_line = metadata_line;
+    char *is_live_line = strchr(duration_line, '|');
+
+    if (!is_live_line)
+    {
+        set_status("Download blocked: cannot read video metadata.");
+        return 0;
+    }
+
+    *is_live_line = '\0';
+    is_live_line++;
+
+    char *live_status_line = strchr(is_live_line, '|');
+
+    if (!live_status_line)
+    {
+        set_status("Download blocked: cannot read video metadata.");
+        return 0;
+    }
+
+    *live_status_line = '\0';
+    live_status_line++;
+
+    if (strcmp(is_live_line, "True") == 0 ||
+        strcmp(is_live_line, "true") == 0 ||
+        (live_status_line[0] != '\0' &&
+         strcmp(live_status_line, "NA") != 0 &&
+         strcmp(live_status_line, "not_live") != 0))
+    {
+        set_status("Download blocked: live streams are not supported.");
+        return 0;
+    }
+
+    if (duration_line[0] == '\0' ||
+        strcmp(duration_line, "NA") == 0 ||
+        strcmp(duration_line, "None") == 0)
+    {
+        set_status("Download blocked: video duration is unknown.");
+        return 0;
+    }
+
+    char *end = NULL;
+    double duration = g_ascii_strtod(duration_line, &end);
+
+    if (end == duration_line || duration <= 0)
+    {
+        set_status("Download blocked: video duration is unknown.");
+        return 0;
+    }
+
+    if (duration > 30 * 60)
+    {
+        if (!confirm_long_download(duration))
+        {
+            set_status("Download cancelled.");
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+static int download_stream_to_file(const char *url, char *downloaded_path, size_t size)
+{
+    char *yt_dlp = find_yt_dlp();
     char *quoted_yt_dlp;
     char *output_template;
     char *quoted_template;
@@ -256,16 +419,15 @@ static int download_stream_to_file(const char *url, char *downloaded_path, size_
     char line[PATH_MAX];
     int status;
 
-    if (g_file_test(local_yt_dlp, G_FILE_TEST_IS_EXECUTABLE))
-        yt_dlp = g_strdup(local_yt_dlp);
-    else
-        yt_dlp = g_find_program_in_path("yt-dlp");
-
-    g_free(local_yt_dlp);
-
     if (!yt_dlp)
     {
         set_status("yt-dlp is not installed.");
+        return 0;
+    }
+
+    if (!stream_metadata_allows_download(url, yt_dlp))
+    {
+        g_free(yt_dlp);
         return 0;
     }
 
@@ -771,6 +933,7 @@ static void app_activate(GtkApplication *app, gpointer user_data)
     load_css();
 
     GtkWidget *window = gtk_application_window_new(app);
+    main_window = GTK_WINDOW(window);
 
     gtk_window_set_title(GTK_WINDOW(window), "Livepaper");
     gtk_window_set_icon_name(GTK_WINDOW(window), "livepaper");
@@ -872,6 +1035,11 @@ static void app_activate(GtkApplication *app, gpointer user_data)
 
     status_label = gtk_label_new("Ready.");
     gtk_widget_set_halign(status_label, GTK_ALIGN_START);
+    gtk_widget_set_hexpand(status_label, TRUE);
+    gtk_label_set_ellipsize(GTK_LABEL(status_label), PANGO_ELLIPSIZE_END);
+    gtk_label_set_single_line_mode(GTK_LABEL(status_label), TRUE);
+    gtk_label_set_width_chars(GTK_LABEL(status_label), 1);
+    gtk_label_set_max_width_chars(GTK_LABEL(status_label), 90);
     gtk_box_append(GTK_BOX(main_box), status_label);
 
     g_signal_connect(apply_button, "clicked", G_CALLBACK(on_apply_clicked), NULL);
