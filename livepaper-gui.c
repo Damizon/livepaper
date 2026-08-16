@@ -342,6 +342,53 @@ static char *find_yt_dlp(void)
     return yt_dlp;
 }
 
+static char *find_ytdlp_js_runtime(void)
+{
+    static const struct
+    {
+        const char *runtime;
+        const char *program;
+    } runtimes[] = {
+        {"deno", "deno"},
+        {"node", "node"},
+        {"bun", "bun"},
+        {"quickjs", "quickjs"},
+        {"quickjs", "qjs"},
+        {NULL, NULL}
+    };
+
+    for (int i = 0; runtimes[i].runtime; i++)
+    {
+        char *program_path = g_find_program_in_path(runtimes[i].program);
+
+        if (!program_path)
+            continue;
+
+        char *runtime_arg = g_strdup_printf("%s:%s", runtimes[i].runtime, program_path);
+        g_free(program_path);
+        return runtime_arg;
+    }
+
+    return NULL;
+}
+
+static char *build_ytdlp_extra_args(void)
+{
+    char *js_runtime = find_ytdlp_js_runtime();
+    char *quoted_js_runtime = js_runtime ? g_shell_quote(js_runtime) : NULL;
+    char *args = g_strdup_printf(
+        "%s%s%s--extractor-args 'youtube:player_client=default,ios,-android_sdkless' ",
+        quoted_js_runtime ? "--js-runtimes " : "",
+        quoted_js_runtime ? quoted_js_runtime : "",
+        quoted_js_runtime ? " " : ""
+    );
+
+    g_free(quoted_js_runtime);
+    g_free(js_runtime);
+
+    return args;
+}
+
 static int command_exit_success(int status)
 {
     return status != -1 && WIFEXITED(status) && WEXITSTATUS(status) == 0;
@@ -397,11 +444,14 @@ static int confirm_long_download(double duration)
 static int stream_metadata_allows_download(const char *url, const char *yt_dlp)
 {
     char *quoted_yt_dlp = g_shell_quote(yt_dlp);
+    char *extra_args = build_ytdlp_extra_args();
     char *quoted_url = g_shell_quote(url);
     char *cmd = g_strdup_printf(
         "%s --no-playlist --skip-download "
+        "%s"
         "--print '%%(duration)s|%%(is_live)s|%%(live_status)s' %s 2>/dev/null",
         quoted_yt_dlp,
+        extra_args,
         quoted_url
     );
     FILE *fp = popen(cmd, "r");
@@ -417,6 +467,7 @@ static int stream_metadata_allows_download(const char *url, const char *yt_dlp)
 
     g_free(cmd);
     g_free(quoted_url);
+    g_free(extra_args);
     g_free(quoted_yt_dlp);
 
     if (!command_exit_success(status) || metadata_line[0] == '\0')
@@ -452,9 +503,9 @@ static int stream_metadata_allows_download(const char *url, const char *yt_dlp)
 
     if (strcmp(is_live_line, "True") == 0 ||
         strcmp(is_live_line, "true") == 0 ||
-        (live_status_line[0] != '\0' &&
-         strcmp(live_status_line, "NA") != 0 &&
-         strcmp(live_status_line, "not_live") != 0))
+        strcmp(live_status_line, "is_live") == 0 ||
+        strcmp(live_status_line, "is_upcoming") == 0 ||
+        strcmp(live_status_line, "post_live") == 0)
     {
         set_status("Download blocked: live streams are not supported.");
         return 0;
@@ -492,6 +543,7 @@ static int stream_metadata_allows_download(const char *url, const char *yt_dlp)
 static int download_stream_to_file(const char *url, char *downloaded_path, size_t size)
 {
     char *yt_dlp = find_yt_dlp();
+    char *extra_args;
     char *quoted_yt_dlp;
     char *output_template;
     char *quoted_template;
@@ -523,12 +575,15 @@ static int download_stream_to_file(const char *url, char *downloaded_path, size_
     quoted_template = g_shell_quote(output_template);
     quoted_url = g_shell_quote(url);
     quoted_yt_dlp = g_shell_quote(yt_dlp);
+    extra_args = build_ytdlp_extra_args();
     cmd = g_strdup_printf(
         "%s --no-playlist --merge-output-format mp4 "
+        "%s"
         "--newline --progress-template 'download:%%(progress._percent_str)s' "
-        "-f 'bestvideo/best/bv*/b' "
+        "-f 'best[height<=?1080][ext=mp4]/18/best' "
         "--print after_move:filepath -o %s %s 2>&1",
         quoted_yt_dlp,
+        extra_args,
         quoted_template,
         quoted_url
     );
@@ -571,6 +626,7 @@ static int download_stream_to_file(const char *url, char *downloaded_path, size_
     }
 
     g_free(cmd);
+    g_free(extra_args);
     g_free(quoted_yt_dlp);
     g_free(quoted_url);
     g_free(quoted_template);

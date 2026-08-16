@@ -1,6 +1,6 @@
 # Livepaper
 
-Livepaper 2.0.0 is a stable video wallpaper manager for Linux Mint Cinnamon on
+Livepaper 2.0.1 is a stable video wallpaper manager for Linux Mint Cinnamon on
 X11/Nemo desktops. It places a looping video behind the desktop icons and
 provides both a GTK4 interface and a command-line tool.
 
@@ -15,7 +15,7 @@ provides both a GTK4 interface and a command-line tool.
 
 ## Requirements
 
-Livepaper 2.0.0 is designed for:
+Livepaper 2.0.1 is designed for:
 
 - Linux Mint Cinnamon
 - X11 session
@@ -26,6 +26,8 @@ Runtime dependencies are handled by the `.deb` package:
 - `mpv`
 - `procps`
 - `ffmpegthumbnailer`
+- `nodejs`
+- `yt-dlp`
 - `libgtk-4-1`
 - `libx11-6`
 - `libxrandr2`
@@ -35,8 +37,8 @@ Runtime dependencies are handled by the `.deb` package:
 Download the `.deb` package from GitHub Releases and install it:
 
 ```bash
-curl -LO https://github.com/Damizon/livepaper/releases/download/v2.0.0/livepaper_2.0.0_amd64.deb
-sudo apt install ./livepaper_2.0.0_amd64.deb
+curl -LO https://github.com/Damizon/livepaper/releases/download/v2.0.1/livepaper_2.0.1_amd64.deb
+sudo apt install ./livepaper_2.0.1_amd64.deb
 ```
 
 Or clone the repository, build the package, and install the generated `.deb`:
@@ -45,7 +47,7 @@ Or clone the repository, build the package, and install the generated `.deb`:
 git clone https://github.com/Damizon/livepaper.git
 cd livepaper
 make deb
-sudo apt install ./build/packages/livepaper_2.0.0_amd64.deb
+sudo apt install ./build/packages/livepaper_2.0.1_amd64.deb
 ```
 
 After installation, launch **Livepaper** from the application menu.
@@ -150,6 +152,17 @@ build/packages/
 ```
 
 ## Release Notes
+
+### 2.0.1
+
+- Fixed YouTube streaming after recent YouTube extraction changes by passing a
+  detected JavaScript runtime to `yt-dlp`.
+- Switched YouTube streaming and download format selection to a more reliable
+  progressive MP4 fallback to avoid intermittent `403 Forbidden` playback URLs.
+- Allowed downloads of YouTube archives marked as `was_live` while still
+  blocking active and upcoming live streams.
+- Added `nodejs` as a package dependency for YouTube JavaScript challenge
+  support.
 
 ### 2.0.0
 

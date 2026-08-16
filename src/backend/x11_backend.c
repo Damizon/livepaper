@@ -67,6 +67,112 @@ static void copy_string(char *dst, size_t size, const char *src)
     dst[len] = '\0';
 }
 
+static int find_program_path(const char *name, char *dst, size_t size)
+{
+    const char *path_env;
+    char *path_copy;
+    char *saveptr = NULL;
+    char *dir;
+
+    if (!name || !dst || size == 0)
+        return 0;
+
+    if (strchr(name, '/'))
+    {
+        if (access(name, X_OK) == 0)
+        {
+            copy_string(dst, size, name);
+            return 1;
+        }
+
+        return 0;
+    }
+
+    path_env = getenv("PATH");
+    if (!path_env || !*path_env)
+        return 0;
+
+    path_copy = strdup(path_env);
+    if (!path_copy)
+        return 0;
+
+    for (dir = strtok_r(path_copy, ":", &saveptr); dir; dir = strtok_r(NULL, ":", &saveptr))
+    {
+        char candidate[PATH_BUF];
+
+        if (*dir == '\0')
+            dir = ".";
+
+        if (snprintf(candidate, sizeof(candidate), "%s/%s", dir, name) >= (int)sizeof(candidate))
+            continue;
+
+        if (access(candidate, X_OK) == 0)
+        {
+            copy_string(dst, size, candidate);
+            free(path_copy);
+            return 1;
+        }
+    }
+
+    free(path_copy);
+    return 0;
+}
+
+static int find_ytdlp_js_runtime(char *dst, size_t size)
+{
+    static const struct
+    {
+        const char *runtime;
+        const char *program;
+    } runtimes[] = {
+        {"deno", "deno"},
+        {"node", "node"},
+        {"bun", "bun"},
+        {"quickjs", "quickjs"},
+        {"quickjs", "qjs"},
+        {NULL, NULL}
+    };
+
+    for (int i = 0; runtimes[i].runtime; i++)
+    {
+        char program_path[PATH_BUF];
+
+        if (!find_program_path(runtimes[i].program, program_path, sizeof(program_path)))
+            continue;
+
+        if (snprintf(dst, size, "%s:%s", runtimes[i].runtime, program_path) >= (int)size)
+            return 0;
+
+        return 1;
+    }
+
+    return 0;
+}
+
+static int build_ytdlp_raw_options(char *dst, size_t size)
+{
+    char js_runtime[PATH_BUF + 32];
+
+    if (!dst || size == 0)
+        return 0;
+
+    if (find_ytdlp_js_runtime(js_runtime, sizeof(js_runtime)))
+    {
+        return snprintf(
+            dst,
+            size,
+            "--ytdl-raw-options=js-runtimes=%s,extractor-args=\"youtube:player_client=default,ios,-android_sdkless\"",
+            js_runtime
+        ) < (int)size;
+    }
+
+    return snprintf(
+        dst,
+        size,
+        "--ytdl-raw-options=extractor-args=\"youtube:player_client=default,ios,-android_sdkless\""
+    ) < (int)size;
+}
+
 static int monitor_matches(const char *requested, const char *name)
 {
     size_t len;
@@ -279,6 +385,7 @@ static pid_t start_mpv(Window win, const char *wallpaper, const char *fit, int i
         char aspect_arg[128];
         char ytdlp_path[PATH_BUF];
         char ytdlp_opt[PATH_BUF + 64];
+        char ytdlp_raw_options[PATH_BUF + 160];
         const char *fit_mode = fit ? fit : "none";
         const char *args[44];
         int argc = 0;
@@ -306,6 +413,8 @@ static pid_t start_mpv(Window win, const char *wallpaper, const char *fit, int i
             "--script-opts=ytdl_hook-ytdl_path=%s",
             ytdlp_path
         );
+        if (!build_ytdlp_raw_options(ytdlp_raw_options, sizeof(ytdlp_raw_options)))
+            ytdlp_raw_options[0] = '\0';
 
         args[argc++] = "mpv";
         args[argc++] = wid_arg;
@@ -332,7 +441,9 @@ static pid_t start_mpv(Window win, const char *wallpaper, const char *fit, int i
         {
             args[argc++] = "--ytdl=yes";
             args[argc++] = ytdlp_opt;
-            args[argc++] = "--ytdl-format=bestvideo/best/bv*/b";
+            if (ytdlp_raw_options[0] != '\0')
+                args[argc++] = ytdlp_raw_options;
+            args[argc++] = "--ytdl-format=best[height<=?1080][ext=mp4]/18/best";
         }
         else
         {

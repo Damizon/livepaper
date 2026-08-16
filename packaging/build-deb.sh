@@ -2,7 +2,7 @@
 set -eu
 
 PACKAGE=livepaper
-VERSION=${VERSION:-2.0.0}
+VERSION=${VERSION:-2.0.1}
 ARCH=$(dpkg --print-architecture)
 ROOT=build/deb-root
 OUTDIR=build/packages
@@ -118,7 +118,7 @@ EOF_SHLIBDEPS_CONTROL
 )
 
 SHLIBS_DEPENDS=$(sed -n 's/^shlibs:Depends=//p' "$SUBSTVARS")
-RUNTIME_DEPENDS="mpv, procps, ffmpegthumbnailer, yt-dlp"
+RUNTIME_DEPENDS="mpv, procps, ffmpegthumbnailer, nodejs, yt-dlp"
 
 cat > "$CONTROL" <<EOF_CONTROL
 Package: $PACKAGE

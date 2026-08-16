@@ -1,7 +1,7 @@
 CC ?= gcc
 PKG_CONFIG ?= pkg-config
 PREFIX ?= /usr
-VERSION ?= 2.0.0
+VERSION ?= 2.0.1
 
 SRC = \
 	src/main.c \
